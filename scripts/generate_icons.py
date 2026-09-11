@@ -64,14 +64,13 @@ def generate_neon_amk_icons(base_image_path, project_root):
     scaled_art = colored_art.resize((art_size, art_size), Image.Resampling.LANCZOS)
     ox = (size - art_size) // 2
 
-    # Layout with exact 2px clearance
-    # Art bottom is at oy + 289
-    # Text glyph top is at text_y + 16
-    # 2px clearance: text_y + 16 = oy + 289 + 1 + 2  =>  text_y = oy + 276
-    gap_px = 2
-    total_group_h = 290 + gap_px + 41  # 333
-    oy = (size - total_group_h) // 2   # 89
-    text_y = oy + 274 + gap_px         # 365
+    # 10px clearance between mouse bottom and text top
+    # Mouse bottom is at index 289 in scaled art (290px)
+    # Glyph height = 41px, offset = 16px
+    mouse_gap_px = 10
+    total_group_h = 290 + mouse_gap_px + 41
+    oy = (size - total_group_h) // 2
+    text_y = oy + 274 + mouse_gap_px
 
     # Subtle neon bloom behind artwork
     art_glow = Image.new('RGBA', (size, size), (0, 0, 0, 0))
@@ -80,7 +79,7 @@ def generate_neon_amk_icons(base_image_path, project_root):
     bg.paste(art_glow, (0, 0), mask=art_glow)
     bg.paste(scaled_art, (ox, oy), mask=scaled_art)
 
-    # 4. Render 'AMK' with Orbitron font (2px distance below artwork)
+    # 4. Render 'AMK' with Orbitron font (10px below mouse)
     font = ImageFont.truetype(font_path, 56)
     text_layer = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     t_draw = ImageDraw.Draw(text_layer)
@@ -113,9 +112,10 @@ def generate_neon_amk_icons(base_image_path, project_root):
     fg_ox = (fg_master_sz - fg_art_w) // 2
     
     fg_font = ImageFont.truetype(font_path, 44)
-    fg_total_group_h = fg_art_w + 2 + 32
+    fg_mouse_gap = 8
+    fg_total_group_h = fg_art_w + fg_mouse_gap + 32
     fg_oy = (fg_master_sz - fg_total_group_h) // 2
-    fg_text_y = fg_oy + fg_art_w + 2 - 12
+    fg_text_y = fg_oy + fg_art_w + fg_mouse_gap - 12
 
     master_fg = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
     fg_glow = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
@@ -124,7 +124,7 @@ def generate_neon_amk_icons(base_image_path, project_root):
     master_fg.paste(fg_glow, (0, 0), mask=fg_glow)
     master_fg.paste(scaled_fg_art, (fg_ox, fg_oy), mask=scaled_fg_art)
 
-    # AMK text on foreground with 2px gap
+    # AMK text on foreground with calibrated gap
     fg_text_layer = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
     fg_t_draw = ImageDraw.Draw(fg_text_layer)
     fg_widths = [fg_t_draw.textbbox((0, 0), l, font=fg_font)[2] - fg_t_draw.textbbox((0, 0), l, font=fg_font)[0] for l in letters]
@@ -164,7 +164,7 @@ def generate_neon_amk_icons(base_image_path, project_root):
 
     # Save master 512x512
     master_circular.save(os.path.join(project_root, 'app_icon_512.png'))
-    print("Master icon and all mipmap icons successfully updated with 2px gap!")
+    print("Master icon and all mipmap icons successfully updated with 10px mouse gap!")
 
 if __name__ == '__main__':
     base_img = r'C:\Users\jmustapa\.gemini\antigravity-cli\brain\6b74d58d-c55f-46ba-9155-8da587264e82\.user_uploaded\uploaded_media_1789089184484.png'
