@@ -1,0 +1,8 @@
+{
+  "name": "amk",
+  "version": "1.0.0",
+  "description": "AMK - Air Mouse & Keyboard Android App",
+  "scripts": {
+    "prebuild": "node scripts/prebuild.js"
+  }
+}

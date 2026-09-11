@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Grants access to app-scoped downloads directory for OTA APK installation -->
+    <external-files-path name="my_downloads" path="Download/" />
+    <cache-path name="my_cache" path="updates/" />
+    <external-path name="external_files" path="." />
+</paths>
