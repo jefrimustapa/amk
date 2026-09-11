@@ -21,8 +21,17 @@ data class AppSettings(
     val lastConnectedDeviceAddress: String? = null,
     val lastConnectedDeviceName: String? = null
 ) {
-    fun toJsonString(): String {
-        return "{\"clickMode\":\"${clickMode.name}\",\"pointerSpeed\":$pointerSpeed,\"accelerationEnabled\":$accelerationEnabled,\"invertScroll\":$invertScroll,\"hapticEnabled\":$hapticEnabled,\"includeNightly\":$includeNightly,\"lastConnectedDeviceAddress\":\"${lastConnectedDeviceAddress ?: ""}\",\"lastConnectedDeviceName\":\"${lastConnectedDeviceName ?: ""}\"}"
+    fun toJsonString(pretty: Boolean = false): String {
+        val obj = JSONObject()
+        obj.put("clickMode", clickMode.name)
+        obj.put("pointerSpeed", pointerSpeed.toDouble())
+        obj.put("accelerationEnabled", accelerationEnabled)
+        obj.put("invertScroll", invertScroll)
+        obj.put("hapticEnabled", hapticEnabled)
+        obj.put("includeNightly", includeNightly)
+        obj.put("lastConnectedDeviceAddress", lastConnectedDeviceAddress ?: "")
+        obj.put("lastConnectedDeviceName", lastConnectedDeviceName ?: "")
+        return if (pretty) obj.toString(2) else obj.toString()
     }
 
     companion object {
@@ -30,43 +39,35 @@ data class AppSettings(
         private const val KEY_SETTINGS_JSON = "key_settings_json"
 
         fun fromJsonString(str: String): AppSettings {
-            var mode = ClickMode.BOTH
-            var speed = 1.2f
-            var accel = true
-            var invert = false
-            var haptic = true
-            var nightly = true
-            var lastAddr: String? = null
-            var lastName: String? = null
-
-            val clean = str.trim().removeSurrounding("{", "}").split(",")
-            for (part in clean) {
-                val kv = part.split(":", limit = 2)
-                if (kv.size == 2) {
-                    val key = kv[0].trim().replace("\"", "")
-                    val value = kv[1].trim().replace("\"", "")
-                    when (key) {
-                        "clickMode" -> mode = try { ClickMode.valueOf(value) } catch (e: Exception) { ClickMode.BOTH }
-                        "pointerSpeed" -> speed = value.toFloatOrNull() ?: 1.2f
-                        "accelerationEnabled" -> accel = value.toBoolean()
-                        "invertScroll" -> invert = value.toBoolean()
-                        "hapticEnabled" -> haptic = value.toBoolean()
-                        "includeNightly" -> nightly = value.toBoolean()
-                        "lastConnectedDeviceAddress" -> if (value.isNotEmpty()) lastAddr = value
-                        "lastConnectedDeviceName" -> if (value.isNotEmpty()) lastName = value
-                    }
+            return try {
+                val obj = JSONObject(str)
+                val mode = try {
+                    ClickMode.valueOf(obj.optString("clickMode", ClickMode.BOTH.name))
+                } catch (e: Exception) {
+                    ClickMode.BOTH
                 }
+                val speed = obj.optDouble("pointerSpeed", 1.2).toFloat()
+                val accel = obj.optBoolean("accelerationEnabled", true)
+                val invert = obj.optBoolean("invertScroll", false)
+                val haptic = obj.optBoolean("hapticEnabled", true)
+                val nightly = obj.optBoolean("includeNightly", true)
+                val lastAddr = obj.optString("lastConnectedDeviceAddress").ifEmpty { null }
+                val lastName = obj.optString("lastConnectedDeviceName").ifEmpty { null }
+
+                AppSettings(
+                    clickMode = mode,
+                    pointerSpeed = speed,
+                    accelerationEnabled = accel,
+                    invertScroll = invert,
+                    hapticEnabled = haptic,
+                    includeNightly = nightly,
+                    lastConnectedDeviceAddress = lastAddr,
+                    lastConnectedDeviceName = lastName
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+                AppSettings()
             }
-            return AppSettings(
-                clickMode = mode,
-                pointerSpeed = speed,
-                accelerationEnabled = accel,
-                invertScroll = invert,
-                hapticEnabled = haptic,
-                includeNightly = nightly,
-                lastConnectedDeviceAddress = lastAddr,
-                lastConnectedDeviceName = lastName
-            )
         }
 
         /**

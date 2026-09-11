@@ -17,17 +17,21 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.BluetoothSearching
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.rounded.Bluetooth
+import androidx.compose.material.icons.rounded.BluetoothSearching
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -88,6 +92,47 @@ fun SettingsScreen(
     var downloadProgress by remember { mutableIntStateOf(0) }
     var downloadStatusText by remember { mutableStateOf<String?>(null) }
 
+    // SAF File Pickers for Export & Import
+    val exportSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { os ->
+                    os.write(settings.toJsonString(pretty = true).toByteArray(Charsets.UTF_8))
+                    os.flush()
+                }
+                Toast.makeText(context, "Settings exported successfully", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    val importSettingsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            try {
+                val jsonStr = context.contentResolver.openInputStream(uri)?.use { ins ->
+                    ins.reader(Charsets.UTF_8).readText()
+                }
+                if (!jsonStr.isNullOrBlank()) {
+                    val imported = AppSettings.fromJsonString(jsonStr)
+                    onSettingsChanged(imported)
+                    AppSettings.save(context, imported)
+                    Toast.makeText(context, "Settings imported successfully", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Selected file was empty", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -118,56 +163,76 @@ fun SettingsScreen(
         item {
             SectionCard(title = "Pointer & Physics") {
                 Text(
-                    text = "Pointer Speed: ${String.format("%.1fx", settings.pointerSpeed)}",
+                    text = "Pointer Speed: ${"%.1f".format(settings.pointerSpeed)}x",
                     color = TextPrimary,
-                    fontSize = 14.sp
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(bottom = 4.dp)
                 )
+
                 Slider(
                     value = settings.pointerSpeed,
-                    onValueChange = { onSettingsChanged(settings.copy(pointerSpeed = it)) },
+                    onValueChange = { newSpeed ->
+                        onSettingsChanged(settings.copy(pointerSpeed = newSpeed))
+                    },
                     valueRange = 0.5f..3.0f,
-                    steps = 25,
+                    steps = 24,
                     colors = SliderDefaults.colors(
                         thumbColor = AccentCyan,
                         activeTrackColor = AccentCyan,
-                        inactiveTrackColor = BorderStroke
-                    )
+                        inactiveTrackColor = DarkSurfaceVariant
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 SettingSwitchRow(
                     label = "Pointer Acceleration",
-                    subtitle = "Dynamic speed scaling for swift pointer sweeps",
+                    subtitle = "Boost speed during fast finger swipes",
                     checked = settings.accelerationEnabled,
                     onCheckedChange = { onSettingsChanged(settings.copy(accelerationEnabled = it)) }
                 )
 
+                Spacer(modifier = Modifier.height(8.dp))
+
                 SettingSwitchRow(
                     label = "Invert Two-Finger Scroll",
-                    subtitle = "Natural vs traditional scroll direction",
+                    subtitle = "Reverse natural scrolling direction for TV apps",
                     checked = settings.invertScroll,
                     onCheckedChange = { onSettingsChanged(settings.copy(invertScroll = it)) }
                 )
+            }
+        }
 
+        // Section: Feedback
+        item {
+            SectionCard(title = "Haptics & Feedback") {
                 SettingSwitchRow(
-                    label = "Haptic Vibration",
-                    subtitle = "Subtle tactile click feedback on tap & buttons",
+                    label = "Haptic Vibration Feedback",
+                    subtitle = "Vibrate phone subtly on tap, click, and remote keys",
                     checked = settings.hapticEnabled,
                     onCheckedChange = { onSettingsChanged(settings.copy(hapticEnabled = it)) }
                 )
             }
         }
 
-        // Section: Bluetooth Pairing & Discovery
+        // Section: Bluetooth Connection
         item {
-            SectionCard(title = "Bluetooth Device Management") {
-                Text(
-                    text = "Status: ${if (connectionState == ConnectionState.CONNECTED) "Connected to $connectedDeviceName" else "Disconnected"}",
-                    color = if (connectionState == ConnectionState.CONNECTED) AccentGreen else TextSecondary,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
+            SectionCard(title = "Bluetooth Controller Connection") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(text = "Status: ${connectionState.name}", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        connectedDeviceName?.let {
+                            Text(text = "Connected to $it", color = AccentGreen, fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -175,25 +240,23 @@ fun SettingsScreen(
                 ) {
                     ActionBtn(
                         label = "Pair New TV",
-                        icon = Icons.Default.BluetoothSearching,
+                        icon = Icons.Rounded.BluetoothSearching,
                         modifier = Modifier.weight(1f)
                     ) {
                         try {
-                            val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 180)
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            val discoverIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)
                             }
-                            context.startActivity(discoverableIntent)
-                            Toast.makeText(context, "Phone is now discoverable on TV for 3 minutes", Toast.LENGTH_LONG).show()
+                            context.startActivity(discoverIntent)
                         } catch (e: Exception) {
-                            Toast.makeText(context, "Error enabling discoverable mode", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Cannot launch discoverability: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                     }
 
                     if (connectionState == ConnectionState.CONNECTED) {
                         ActionBtn(
                             label = "Disconnect",
-                            icon = Icons.Default.Bluetooth,
+                            icon = Icons.Rounded.Bluetooth,
                             modifier = Modifier.weight(1f)
                         ) {
                             hidManager.disconnect()
@@ -240,21 +303,38 @@ fun SettingsScreen(
             }
         }
 
-        // Section: Persistent Storage Info
+        // Section: Persistent Storage & Backup
         item {
-            SectionCard(title = "Persistent Storage (Zero Data Loss)") {
+            SectionCard(title = "Persistent Storage & Backup") {
                 Text(
                     text = "Settings automatically mirror to public storage:\n/sdcard/Documents/AMK/amk_settings.json",
                     color = TextSecondary,
                     fontSize = 12.sp,
                     lineHeight = 18.sp
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "✅ Your configurations remain preserved and automatically restore if you uninstall and reinstall the application.",
-                    color = AccentGreen,
-                    fontSize = 12.sp
-                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    ActionBtn(
+                        label = "Export Settings",
+                        icon = Icons.Rounded.FileDownload,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        exportSettingsLauncher.launch("amk_settings.json")
+                    }
+
+                    ActionBtn(
+                        label = "Import Settings",
+                        icon = Icons.Rounded.FileUpload,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        importSettingsLauncher.launch(arrayOf("application/json", "text/*"))
+                    }
+                }
             }
         }
 
@@ -284,7 +364,7 @@ fun SettingsScreen(
 
                 ActionBtn(
                     label = if (isCheckingUpdate) "Checking GitHub..." else "Check for Updates",
-                    icon = Icons.Default.CloudDownload,
+                    icon = Icons.Rounded.CloudDownload,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     coroutineScope.launch {
@@ -334,7 +414,7 @@ fun SettingsScreen(
                                 } else {
                                     ActionBtn(
                                         label = "Download & Install (${info.apkSizeMb ?: "APK"})",
-                                        icon = Icons.Default.CloudDownload,
+                                        icon = Icons.Rounded.CloudDownload,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         coroutineScope.launch {
@@ -394,7 +474,7 @@ fun ClickModeSelector(
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
                 )
                 if (selected) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Rounded.Check, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(18.dp))
                 }
             }
         }

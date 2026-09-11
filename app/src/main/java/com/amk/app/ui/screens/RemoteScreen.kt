@@ -17,20 +17,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.FastForward
-import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.VolumeDown
-import androidx.compose.material.icons.filled.VolumeMute
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.PowerSettingsNew
+import androidx.compose.material.icons.rounded.VolumeDown
+import androidx.compose.material.icons.rounded.VolumeMute
+import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +49,7 @@ import com.amk.app.ui.components.HapticFeedback
 import com.amk.app.ui.theme.AccentCyan
 import com.amk.app.ui.theme.AccentRed
 import com.amk.app.ui.theme.BorderStroke
+import com.amk.app.ui.theme.DarkSurface
 import com.amk.app.ui.theme.DarkSurfaceVariant
 import com.amk.app.ui.theme.TextPrimary
 import com.amk.app.ui.theme.TextSecondary
@@ -77,16 +79,16 @@ fun RemoteScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            RoundButton(icon = Icons.Default.PowerSettingsNew, tint = AccentRed) {
+            RoundButton(icon = Icons.Rounded.PowerSettingsNew, tint = AccentRed) {
                 sendConsumer(HidConstants.CONSUMER_POWER)
             }
-            RoundButton(icon = Icons.Default.Home) {
+            RoundButton(icon = Icons.Rounded.Home) {
                 sendConsumer(HidConstants.CONSUMER_HOME)
             }
-            RoundButton(icon = Icons.Default.ArrowBack) {
+            RoundButton(icon = Icons.Rounded.ArrowBack) {
                 sendConsumer(HidConstants.CONSUMER_BACK)
             }
-            RoundButton(icon = Icons.Default.Menu) {
+            RoundButton(icon = Icons.Rounded.Menu) {
                 sendConsumer(HidConstants.CONSUMER_MENU)
             }
         }
@@ -109,7 +111,7 @@ fun RemoteScreen(
                     .clickable { sendConsumer(HidConstants.CONSUMER_DPAD_UP) },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Up", tint = TextPrimary, modifier = Modifier.size(36.dp))
+                Icon(Icons.Rounded.KeyboardArrowUp, contentDescription = "Up", tint = TextPrimary, modifier = Modifier.size(36.dp))
             }
 
             // D-Pad Down
@@ -121,7 +123,7 @@ fun RemoteScreen(
                     .clickable { sendConsumer(HidConstants.CONSUMER_DPAD_DOWN) },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Down", tint = TextPrimary, modifier = Modifier.size(36.dp))
+                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Down", tint = TextPrimary, modifier = Modifier.size(36.dp))
             }
 
             // D-Pad Left
@@ -133,7 +135,7 @@ fun RemoteScreen(
                     .clickable { sendConsumer(HidConstants.CONSUMER_DPAD_LEFT) },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Left", tint = TextPrimary, modifier = Modifier.size(36.dp))
+                Icon(Icons.Rounded.KeyboardArrowLeft, contentDescription = "Left", tint = TextPrimary, modifier = Modifier.size(36.dp))
             }
 
             // D-Pad Right
@@ -145,7 +147,7 @@ fun RemoteScreen(
                     .clickable { sendConsumer(HidConstants.CONSUMER_DPAD_RIGHT) },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Right", tint = TextPrimary, modifier = Modifier.size(36.dp))
+                Icon(Icons.Rounded.KeyboardArrowRight, contentDescription = "Right", tint = TextPrimary, modifier = Modifier.size(36.dp))
             }
 
             // Center OK Button
@@ -178,21 +180,21 @@ fun RemoteScreen(
             ) {
                 MediaButton(
                     label = "Vol -",
-                    icon = Icons.Default.VolumeDown,
+                    icon = Icons.Rounded.VolumeDown,
                     modifier = Modifier.weight(1f)
                 ) {
                     sendConsumer(HidConstants.CONSUMER_VOLUME_DOWN)
                 }
                 MediaButton(
                     label = "Mute",
-                    icon = Icons.Default.VolumeMute,
+                    icon = Icons.Rounded.VolumeMute,
                     modifier = Modifier.weight(1f)
                 ) {
                     sendConsumer(HidConstants.CONSUMER_MUTE)
                 }
                 MediaButton(
                     label = "Vol +",
-                    icon = Icons.Default.VolumeUp,
+                    icon = Icons.Rounded.VolumeUp,
                     modifier = Modifier.weight(1f)
                 ) {
                     sendConsumer(HidConstants.CONSUMER_VOLUME_UP)
@@ -206,21 +208,22 @@ fun RemoteScreen(
             ) {
                 MediaButton(
                     label = "Rewind",
-                    icon = Icons.Default.FastRewind,
+                    icon = Icons.Rounded.FastRewind,
                     modifier = Modifier.weight(1f)
                 ) {
                     sendConsumer(HidConstants.CONSUMER_SCAN_PREV)
                 }
                 MediaButton(
                     label = "Play / Pause",
-                    icon = Icons.Default.PlayArrow,
+                    icon = Icons.Rounded.PlayArrow,
                     modifier = Modifier.weight(1f)
                 ) {
-                    sendConsumer(HidConstants.CONSUMER_PLAY_PAUSE)
+                    HapticFeedback.tick(context, settings.hapticEnabled)
+                    hidManager.sendPlayPauseCombo()
                 }
                 MediaButton(
                     label = "Forward",
-                    icon = Icons.Default.FastForward,
+                    icon = Icons.Rounded.FastForward,
                     modifier = Modifier.weight(1f)
                 ) {
                     sendConsumer(HidConstants.CONSUMER_SCAN_NEXT)
@@ -258,20 +261,51 @@ fun MediaButton(
 ) {
     Box(
         modifier = modifier
-            .height(52.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .height(60.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(DarkSurfaceVariant)
-            .border(1.dp, BorderStroke, RoundedCornerShape(16.dp))
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
+            .border(1.dp, BorderStroke, RoundedCornerShape(12.dp))
+            .clickable { onClick() }
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
-            Icon(icon, contentDescription = label, tint = TextPrimary, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(text = label, color = TextPrimary, fontSize = 13.sp)
+            // Top half: Icon
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1.1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = TextPrimary,
+                    modifier = Modifier.height(20.dp)
+                )
+            }
+
+            // Shade Divider
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = BorderStroke.copy(alpha = 0.7f)
+            )
+
+            // Bottom half: Description with shaded background
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.9f)
+                    .background(DarkSurface.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1
+                )
+            }
         }
     }
 }

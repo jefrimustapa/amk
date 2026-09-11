@@ -18,14 +18,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Backspace
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.KeyboardReturn
-import androidx.compose.material.icons.filled.SpaceBar
+import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Backspace
+import androidx.compose.material.icons.rounded.ContentPaste
+import androidx.compose.material.icons.rounded.KeyboardReturn
+import androidx.compose.material.icons.rounded.KeyboardTab
+import androidx.compose.material.icons.rounded.SpaceBar
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -50,6 +52,8 @@ import com.amk.app.model.AppSettings
 import com.amk.app.ui.components.HapticFeedback
 import com.amk.app.ui.theme.AccentCyan
 import com.amk.app.ui.theme.BorderStroke
+import com.amk.app.ui.theme.DarkBg
+import com.amk.app.ui.theme.DarkSurface
 import com.amk.app.ui.theme.DarkSurfaceVariant
 import com.amk.app.ui.theme.TextMuted
 import com.amk.app.ui.theme.TextPrimary
@@ -148,21 +152,21 @@ fun KeyboardScreen(
         ) {
             KeyButton(
                 label = "Enter",
-                icon = Icons.Default.KeyboardReturn,
+                icon = Icons.Rounded.KeyboardReturn,
                 modifier = Modifier.weight(1f)
             ) {
                 sendKey(HidConstants.KEY_ENTER)
             }
             KeyButton(
                 label = "Backspace",
-                icon = Icons.Default.Backspace,
+                icon = Icons.Rounded.Backspace,
                 modifier = Modifier.weight(1f)
             ) {
                 sendKey(HidConstants.KEY_BACKSPACE)
             }
             KeyButton(
                 label = "Esc / Back",
-                icon = Icons.Default.ArrowBack,
+                icon = Icons.Rounded.ArrowBack,
                 modifier = Modifier.weight(1f)
             ) {
                 sendKey(HidConstants.KEY_ESCAPE)
@@ -178,20 +182,21 @@ fun KeyboardScreen(
         ) {
             KeyButton(
                 label = "Space",
-                icon = Icons.Default.SpaceBar,
+                icon = Icons.Rounded.SpaceBar,
                 modifier = Modifier.weight(1f)
             ) {
                 sendKey(HidConstants.KEY_SPACE)
             }
             KeyButton(
                 label = "Tab",
+                icon = Icons.Rounded.KeyboardTab,
                 modifier = Modifier.weight(1f)
             ) {
                 sendKey(HidConstants.KEY_TAB)
             }
             KeyButton(
                 label = "Paste",
-                icon = Icons.Default.ContentPaste,
+                icon = Icons.Rounded.ContentPaste,
                 modifier = Modifier.weight(1f)
             ) {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
@@ -218,7 +223,7 @@ fun KeyboardScreen(
         ) {
             KeyButton(
                 label = "Up",
-                icon = Icons.Default.ArrowUpward,
+                icon = Icons.Rounded.ArrowUpward,
                 modifier = Modifier.weight(0.5f)
             ) {
                 sendKey(HidConstants.KEY_UP)
@@ -233,21 +238,21 @@ fun KeyboardScreen(
         ) {
             KeyButton(
                 label = "Left",
-                icon = Icons.Default.ArrowBack,
+                icon = Icons.Rounded.ArrowBack,
                 modifier = Modifier.weight(1f)
             ) {
                 sendKey(HidConstants.KEY_LEFT)
             }
             KeyButton(
                 label = "Down",
-                icon = Icons.Default.ArrowDownward,
+                icon = Icons.Rounded.ArrowDownward,
                 modifier = Modifier.weight(1f)
             ) {
                 sendKey(HidConstants.KEY_DOWN)
             }
             KeyButton(
                 label = "Right",
-                icon = Icons.Default.ArrowForward,
+                icon = Icons.Rounded.ArrowForward,
                 modifier = Modifier.weight(1f)
             ) {
                 sendKey(HidConstants.KEY_RIGHT)
@@ -265,30 +270,53 @@ fun KeyButton(
 ) {
     Box(
         modifier = modifier
-            .height(52.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .height(60.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(DarkSurfaceVariant)
-            .border(1.dp, BorderStroke, RoundedCornerShape(14.dp))
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
+            .border(1.dp, BorderStroke, RoundedCornerShape(12.dp))
+            .clickable { onClick() }
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+        Column(
+            modifier = Modifier.fillMaxSize()
         ) {
-            if (icon != null) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = label,
-                    tint = TextPrimary,
-                    modifier = Modifier.padding(end = 6.dp)
+            // Top half: Icon
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1.1f),
+                contentAlignment = Alignment.Center
+            ) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = TextPrimary,
+                        modifier = Modifier.height(20.dp)
+                    )
+                }
+            }
+
+            // Shade Divider
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = BorderStroke.copy(alpha = 0.7f)
+            )
+
+            // Bottom half: Description with shaded background
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.9f)
+                    .background(DarkSurface.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1
                 )
             }
-            Text(
-                text = label,
-                color = TextPrimary,
-                fontSize = 13.sp
-            )
         }
     }
 }

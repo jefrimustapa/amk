@@ -257,4 +257,13 @@ class HidDeviceManager(private val context: Context) {
             hid.sendReport(dev, HidConstants.REPORT_ID_CONSUMER.toInt(), releaseReport)
         }, 50)
     }
+
+    /**
+     * Sends dual play/pause codes: standard Media Play/Pause (Consumer 0x00CD)
+     * AND Keyboard Spacebar (HID Key 0x2C) for universal compatibility across apps & browsers.
+     */
+    fun sendPlayPauseCombo() {
+        sendConsumerKey(HidConstants.CONSUMER_PLAY_PAUSE)
+        sendKeyboardReport(HidConstants.MOD_NONE, HidConstants.KEY_SPACE)
+    }
 }

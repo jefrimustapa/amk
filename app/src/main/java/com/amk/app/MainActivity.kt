@@ -10,10 +10,17 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -45,6 +52,7 @@ import com.amk.app.ui.screens.SettingsScreen
 import com.amk.app.ui.screens.TouchpadScreen
 import com.amk.app.ui.theme.AMKTheme
 import com.amk.app.ui.theme.AccentCyan
+import com.amk.app.ui.theme.AppFontFamily
 import com.amk.app.ui.theme.DarkBg
 import com.amk.app.ui.theme.DarkSurface
 import com.amk.app.ui.theme.TextMuted
@@ -179,12 +187,25 @@ fun MainAppScaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = "AMK",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_app_header),
+                            contentDescription = "App Icon",
+                            modifier = Modifier
+                                .padding(end = 10.dp)
+                                .width(44.dp)
+                                .height(36.dp)
+                        )
+                        Text(
+                            text = "Air Mouse Key",
+                            fontFamily = AppFontFamily,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
                 },
                 actions = {
                     ConnectionBadge(

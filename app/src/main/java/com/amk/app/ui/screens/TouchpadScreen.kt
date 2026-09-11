@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PanTool
+import androidx.compose.material.icons.rounded.Mouse
+import androidx.compose.material.icons.rounded.PanTool
+import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -184,7 +187,7 @@ fun TouchpadScreen(
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.PanTool,
+                    imageVector = Icons.Rounded.PanTool,
                     contentDescription = null,
                     tint = TextMuted.copy(alpha = 0.4f),
                     modifier = Modifier.size(48.dp)
@@ -208,60 +211,88 @@ fun TouchpadScreen(
         if (showButtons) {
             Spacer(modifier = Modifier.height(14.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Left Click Button
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(DarkSurfaceVariant)
-                        .border(1.dp, BorderStroke, RoundedCornerShape(18.dp))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            HapticFeedback.tick(context, settings.hapticEnabled)
-                            hidManager.sendMouseReport(1, 0, 0, 0)
-                            hidManager.sendMouseReport(0, 0, 0, 0)
-                        },
-                    contentAlignment = Alignment.Center
+                TouchpadButton(
+                    label = "Left Click",
+                    icon = Icons.Rounded.Mouse,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text(
-                        text = "Left Click",
-                        color = TextPrimary,
-                        fontSize = 15.sp
-                    )
+                    HapticFeedback.tick(context, settings.hapticEnabled)
+                    hidManager.sendMouseReport(1, 0, 0, 0)
+                    hidManager.sendMouseReport(0, 0, 0, 0)
                 }
 
                 // Right Click Button
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(DarkSurfaceVariant)
-                        .border(1.dp, BorderStroke, RoundedCornerShape(18.dp))
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            HapticFeedback.tick(context, settings.hapticEnabled)
-                            hidManager.sendMouseReport(2, 0, 0, 0)
-                            hidManager.sendMouseReport(0, 0, 0, 0)
-                        },
-                    contentAlignment = Alignment.Center
+                TouchpadButton(
+                    label = "Right Click",
+                    icon = Icons.Rounded.TouchApp,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text(
-                        text = "Right Click",
-                        color = TextSecondary,
-                        fontSize = 15.sp
-                    )
+                    HapticFeedback.tick(context, settings.hapticEnabled)
+                    hidManager.sendMouseReport(2, 0, 0, 0)
+                    hidManager.sendMouseReport(0, 0, 0, 0)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun TouchpadButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .height(64.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(DarkSurfaceVariant)
+            .border(1.dp, BorderStroke, RoundedCornerShape(12.dp))
+            .clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            // Top half: Icon
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1.1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    tint = TextPrimary,
+                    modifier = Modifier.height(20.dp)
+                )
+            }
+
+            // Shade Divider
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = BorderStroke.copy(alpha = 0.7f)
+            )
+
+            // Bottom half: Description with shaded background
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(0.9f)
+                    .background(DarkSurface.copy(alpha = 0.55f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    color = TextSecondary,
+                    fontSize = 11.sp,
+                    maxLines = 1
+                )
             }
         }
     }
