@@ -17,10 +17,12 @@ data class AppSettings(
     val accelerationEnabled: Boolean = true,
     val invertScroll: Boolean = false,
     val hapticEnabled: Boolean = true,
-    val includeNightly: Boolean = true
+    val includeNightly: Boolean = true,
+    val lastConnectedDeviceAddress: String? = null,
+    val lastConnectedDeviceName: String? = null
 ) {
     fun toJsonString(): String {
-        return "{\"clickMode\":\"${clickMode.name}\",\"pointerSpeed\":$pointerSpeed,\"accelerationEnabled\":$accelerationEnabled,\"invertScroll\":$invertScroll,\"hapticEnabled\":$hapticEnabled,\"includeNightly\":$includeNightly}"
+        return "{\"clickMode\":\"${clickMode.name}\",\"pointerSpeed\":$pointerSpeed,\"accelerationEnabled\":$accelerationEnabled,\"invertScroll\":$invertScroll,\"hapticEnabled\":$hapticEnabled,\"includeNightly\":$includeNightly,\"lastConnectedDeviceAddress\":\"${lastConnectedDeviceAddress ?: ""}\",\"lastConnectedDeviceName\":\"${lastConnectedDeviceName ?: ""}\"}"
     }
 
     companion object {
@@ -34,10 +36,12 @@ data class AppSettings(
             var invert = false
             var haptic = true
             var nightly = true
+            var lastAddr: String? = null
+            var lastName: String? = null
 
             val clean = str.trim().removeSurrounding("{", "}").split(",")
             for (part in clean) {
-                val kv = part.split(":")
+                val kv = part.split(":", limit = 2)
                 if (kv.size == 2) {
                     val key = kv[0].trim().replace("\"", "")
                     val value = kv[1].trim().replace("\"", "")
@@ -48,6 +52,8 @@ data class AppSettings(
                         "invertScroll" -> invert = value.toBoolean()
                         "hapticEnabled" -> haptic = value.toBoolean()
                         "includeNightly" -> nightly = value.toBoolean()
+                        "lastConnectedDeviceAddress" -> if (value.isNotEmpty()) lastAddr = value
+                        "lastConnectedDeviceName" -> if (value.isNotEmpty()) lastName = value
                     }
                 }
             }
@@ -57,7 +63,9 @@ data class AppSettings(
                 accelerationEnabled = accel,
                 invertScroll = invert,
                 hapticEnabled = haptic,
-                includeNightly = nightly
+                includeNightly = nightly,
+                lastConnectedDeviceAddress = lastAddr,
+                lastConnectedDeviceName = lastName
             )
         }
 

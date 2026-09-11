@@ -40,7 +40,9 @@ class AppUnitTest {
             accelerationEnabled = false,
             invertScroll = true,
             hapticEnabled = false,
-            includeNightly = true
+            includeNightly = true,
+            lastConnectedDeviceAddress = "6C:0D:C4:05:FA:93",
+            lastConnectedDeviceName = "MIBOX4"
         )
 
         val json = settings.toJsonString()
@@ -52,6 +54,8 @@ class AppUnitTest {
         assertEquals(true, restored.invertScroll)
         assertEquals(false, restored.hapticEnabled)
         assertEquals(true, restored.includeNightly)
+        assertEquals("6C:0D:C4:05:FA:93", restored.lastConnectedDeviceAddress)
+        assertEquals("MIBOX4", restored.lastConnectedDeviceName)
     }
 
     @Test

@@ -57,6 +57,9 @@ class HidDeviceManager(private val context: Context) {
         }
     }
 
+    var onDeviceConnectedListener: ((BluetoothDevice) -> Unit)? = null
+    private var lastTargetDevice: BluetoothDevice? = null
+
     private val hidCallback = object : BluetoothHidDevice.Callback() {
         override fun onAppStatusChanged(pluggedDevice: BluetoothDevice?, registered: Boolean) {
             isAppRegistered = registered
@@ -64,6 +67,17 @@ class HidDeviceManager(private val context: Context) {
             if (pluggedDevice != null) {
                 connectedDevice = pluggedDevice
                 _connectedDeviceName.value = pluggedDevice.name ?: pluggedDevice.address
+                onDeviceConnectedListener?.invoke(pluggedDevice)
+            } else if (registered && connectedDevice == null && lastTargetDevice != null) {
+                // Auto-reconnect to last known TV target once app re-registers
+                mainHandler.postDelayed({
+                    lastTargetDevice?.let { target ->
+                        if (connectedDevice == null) {
+                            Log.i(tag, "Auto-reconnecting to ${target.name ?: target.address} after registration")
+                            connect(target)
+                        }
+                    }
+                }, 1000)
             }
         }
 
@@ -73,8 +87,10 @@ class HidDeviceManager(private val context: Context) {
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     connectedDevice = device
+                    lastTargetDevice = device
                     _connectionState.value = ConnectionState.CONNECTED
                     _connectedDeviceName.value = deviceName
+                    device?.let { onDeviceConnectedListener?.invoke(it) }
                 }
                 BluetoothProfile.STATE_CONNECTING -> {
                     connectedDevice = device
@@ -86,6 +102,17 @@ class HidDeviceManager(private val context: Context) {
                         connectedDevice = null
                         _connectionState.value = ConnectionState.DISCONNECTED
                         _connectedDeviceName.value = null
+
+                        // If unprompted disconnect happened (e.g. phone lock sleep), attempt automatic reconnection
+                        device?.let { disconnectedTarget ->
+                            lastTargetDevice = disconnectedTarget
+                            mainHandler.postDelayed({
+                                if (connectedDevice == null && isAppRegistered) {
+                                    Log.i(tag, "Attempting reconnect to ${disconnectedTarget.name ?: disconnectedTarget.address}")
+                                    connect(disconnectedTarget)
+                                }
+                            }, 2000)
+                        }
                     }
                 }
             }
@@ -113,6 +140,28 @@ class HidDeviceManager(private val context: Context) {
         }
     }
 
+    fun reconnectIfPossible() {
+        if (connectedDevice != null) return
+        if (!isAppRegistered) {
+            registerHidApp()
+            return
+        }
+        val target = lastTargetDevice ?: return
+        Log.i(tag, "reconnectIfPossible: connecting to ${target.name}")
+        connect(target)
+    }
+
+    fun setLastTarget(address: String) {
+        try {
+            val dev = bluetoothAdapter?.getRemoteDevice(address)
+            if (dev != null) {
+                lastTargetDevice = dev
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Invalid device address: $address")
+        }
+    }
+
     private fun registerHidApp() {
         val hid = hidDevice ?: return
         if (isAppRegistered) return
@@ -132,6 +181,7 @@ class HidDeviceManager(private val context: Context) {
 
     fun connect(device: BluetoothDevice) {
         val hid = hidDevice ?: return
+        lastTargetDevice = device
         Log.i(tag, "Attempting connection to ${device.name} (${device.address})")
         _connectionState.value = ConnectionState.CONNECTING
         _connectedDeviceName.value = device.name ?: device.address
@@ -142,6 +192,7 @@ class HidDeviceManager(private val context: Context) {
         val hid = hidDevice ?: return
         val target = connectedDevice ?: return
         Log.i(tag, "Disconnecting from ${target.name}")
+        lastTargetDevice = null // Explicit user disconnect: don't auto-reconnect
         hid.disconnect(target)
     }
 

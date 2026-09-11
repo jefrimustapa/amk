@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
     ) { permissions ->
         val allGranted = permissions.entries.all { it.value }
         if (allGranted) {
-            hidManager.start()
+            startHid()
         } else {
             Toast.makeText(this, "Bluetooth permissions are required for AMK controller", Toast.LENGTH_LONG).show()
         }
@@ -73,7 +73,26 @@ class MainActivity : ComponentActivity() {
         appSettings = AppSettings.load(this)
 
         hidManager = HidDeviceManager(this)
+
+        // Restore last connected target address if available
+        appSettings.lastConnectedDeviceAddress?.let { addr ->
+            hidManager.setLastTarget(addr)
+        }
+
+        // Keep last connected device updated in persistent settings
+        hidManager.onDeviceConnectedListener = { device ->
+            val updated = appSettings.copy(
+                lastConnectedDeviceAddress = device.address,
+                lastConnectedDeviceName = device.name ?: device.address
+            )
+            appSettings = updated
+            AppSettings.save(this, updated)
+        }
+
         checkAndRequestPermissions()
+
+        // Keep screen awake while user is actively using trackpad/remote
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         setContent {
             AMKTheme {
@@ -87,6 +106,12 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // When phone unlocks and returns to AMK, ensure HID service and device reconnect
+        hidManager.reconnectIfPossible()
     }
 
     private fun checkAndRequestPermissions() {
@@ -111,10 +136,25 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         if (permissionsToRequest.isNotEmpty()) {
             bluetoothPermissionsLauncher.launch(permissionsToRequest.toTypedArray())
         } else {
-            hidManager.start()
+            startHid()
+        }
+    }
+
+    private fun startHid() {
+        hidManager.start()
+        try {
+            com.amk.app.hid.HidService.start(this)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
