@@ -280,20 +280,14 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    val countdownStr = if (discoverableSecondsRemaining > 0) {
-                        val mins = discoverableSecondsRemaining / 60
-                        val secs = discoverableSecondsRemaining % 60
-                        if (mins > 0) "${mins}m ${secs}s" else "${secs}s"
-                    } else null
-
                     if (isDiscoverable) {
                         ActionBtn(
-                            label = if (countdownStr != null) "Stop ($countdownStr)" else "Stop Pairing",
+                            label = "Stop Pairing",
                             icon = Icons.Rounded.Close,
                             tint = AccentRed,
                             textColor = AccentRed,
                             borderColor = AccentRed.copy(alpha = 0.5f),
-                            modifier = Modifier.weight(1.1f)
+                            modifier = Modifier.weight(1f)
                         ) {
                             stopPairing()
                         }
@@ -381,28 +375,12 @@ fun SettingsScreen(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Text(
-                                        text = timeText,
-                                        color = AccentCyan,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Stop",
-                                        color = AccentRed,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(AccentRed.copy(alpha = 0.15f))
-                                            .clickable { stopPairing() }
-                                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                                    )
-                                }
+                                Text(
+                                    text = timeText,
+                                    color = AccentCyan,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
