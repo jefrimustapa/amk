@@ -21,7 +21,7 @@ enum class ConnectionState {
 }
 
 @SuppressLint("MissingPermission")
-class HidDeviceManager(private val context: Context) {
+class HidDeviceManager private constructor(private val context: Context) {
     private val tag = "AMK_HID"
     private val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var hidDevice: BluetoothHidDevice? = null
@@ -36,6 +36,9 @@ class HidDeviceManager(private val context: Context) {
     val connectedDeviceName: StateFlow<String?> = _connectedDeviceName
 
     private var isAppRegistered = false
+    private var connectionStartTime = 0L
+    private var reconnectAttempts = 0
+    private val maxReconnectAttempts = 2
 
     private val serviceListener = object : BluetoothProfile.ServiceListener {
         override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
@@ -69,15 +72,22 @@ class HidDeviceManager(private val context: Context) {
                 _connectedDeviceName.value = pluggedDevice.name ?: pluggedDevice.address
                 onDeviceConnectedListener?.invoke(pluggedDevice)
             } else if (registered && connectedDevice == null && lastTargetDevice != null) {
-                // Auto-reconnect to last known TV target once app re-registers
-                mainHandler.postDelayed({
-                    lastTargetDevice?.let { target ->
-                        if (connectedDevice == null) {
-                            Log.i(tag, "Auto-reconnecting to ${target.name ?: target.address} after registration")
-                            connect(target)
-                        }
+                // Auto-reconnect to last known TV target once app re-registers, but ONLY if still bonded
+                val target = lastTargetDevice
+                if (target != null) {
+                    val isBonded = bluetoothAdapter?.bondedDevices?.any { it.address == target.address } == true
+                    if (isBonded) {
+                        mainHandler.postDelayed({
+                            if (connectedDevice == null) {
+                                Log.i(tag, "Auto-reconnecting to ${target.name ?: target.address} after registration")
+                                connect(target)
+                            }
+                        }, 1000)
+                    } else {
+                        Log.w(tag, "Skipping auto-reconnect: ${target.name ?: target.address} is not bonded")
+                        lastTargetDevice = null
                     }
-                }, 1000)
+                }
             }
         }
 
@@ -88,6 +98,8 @@ class HidDeviceManager(private val context: Context) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     connectedDevice = device
                     lastTargetDevice = device
+                    connectionStartTime = System.currentTimeMillis()
+                    reconnectAttempts = 0
                     _connectionState.value = ConnectionState.CONNECTED
                     _connectedDeviceName.value = deviceName
                     device?.let { onDeviceConnectedListener?.invoke(it) }
@@ -98,23 +110,47 @@ class HidDeviceManager(private val context: Context) {
                     _connectedDeviceName.value = deviceName
                 }
                 else -> {
-                    if (device == connectedDevice) {
+                    val duration = if (connectionStartTime > 0) System.currentTimeMillis() - connectionStartTime else 0L
+                    connectionStartTime = 0L
+
+                    if (device == connectedDevice || connectedDevice == null) {
                         connectedDevice = null
                         _connectionState.value = ConnectionState.DISCONNECTED
                         _connectedDeviceName.value = null
 
-                        // If unprompted disconnect happened (e.g. phone lock sleep), attempt automatic reconnection
-                        device?.let { disconnectedTarget ->
-                            lastTargetDevice = disconnectedTarget
-                            mainHandler.postDelayed({
-                                if (connectedDevice == null && isAppRegistered) {
-                                    Log.i(tag, "Attempting reconnect to ${disconnectedTarget.name ?: disconnectedTarget.address}")
-                                    connect(disconnectedTarget)
-                                }
-                            }, 2000)
+                        // Only auto-reconnect if it was an active connection that lasted > 3 seconds,
+                        // device is still bonded, and we haven't exceeded retry attempts
+                        val isBonded = device != null && bluetoothAdapter?.bondedDevices?.any { it.address == device.address } == true
+                        if (isBonded && duration > 3000 && reconnectAttempts < maxReconnectAttempts) {
+                            reconnectAttempts++
+                            device?.let { disconnectedTarget ->
+                                lastTargetDevice = disconnectedTarget
+                                mainHandler.postDelayed({
+                                    if (connectedDevice == null && isAppRegistered) {
+                                        Log.i(tag, "Attempting reconnect to ${disconnectedTarget.name ?: disconnectedTarget.address} (attempt $reconnectAttempts)")
+                                        connect(disconnectedTarget)
+                                    }
+                                }, 2000)
+                            }
+                        } else {
+                            if (duration in 1..3000) {
+                                Log.w(tag, "Target $deviceName disconnected immediately (${duration}ms) or not bonded. Aborting auto-reconnect.")
+                            }
+                            reconnectAttempts = 0
                         }
                     }
                 }
+            }
+        }
+    }
+
+    companion object {
+        @Volatile
+        private var instance: HidDeviceManager? = null
+
+        fun getInstance(context: Context): HidDeviceManager {
+            return instance ?: synchronized(this) {
+                instance ?: HidDeviceManager(context.applicationContext).also { instance = it }
             }
         }
     }
@@ -147,6 +183,12 @@ class HidDeviceManager(private val context: Context) {
             return
         }
         val target = lastTargetDevice ?: return
+        val isBonded = bluetoothAdapter?.bondedDevices?.any { it.address == target.address } == true
+        if (!isBonded) {
+            Log.w(tag, "reconnectIfPossible: ${target.name} is no longer bonded, clearing")
+            lastTargetDevice = null
+            return
+        }
         Log.i(tag, "reconnectIfPossible: connecting to ${target.name}")
         connect(target)
     }
@@ -160,6 +202,13 @@ class HidDeviceManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(tag, "Invalid device address: $address")
         }
+    }
+
+    fun clearLastTarget() {
+        Log.i(tag, "clearLastTarget: clearing remembered target (was ${lastTargetDevice?.name ?: lastTargetDevice?.address})")
+        lastTargetDevice = null
+        reconnectAttempts = 0
+        mainHandler.removeCallbacksAndMessages(null)
     }
 
     private fun registerHidApp() {

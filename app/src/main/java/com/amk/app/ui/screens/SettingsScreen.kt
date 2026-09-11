@@ -244,6 +244,14 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f)
                     ) {
                         try {
+                            // Clear last remembered target so phone remains purely in listening mode without reconnect races
+                            hidManager.clearLastTarget()
+                            onSettingsChanged(
+                                settings.copy(
+                                    lastConnectedDeviceAddress = null,
+                                    lastConnectedDeviceName = null
+                                )
+                            )
                             val discoverIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
                                 putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)
                             }
@@ -287,16 +295,40 @@ fun SettingsScreen(
                                 .padding(vertical = 6.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(DarkSurfaceVariant.copy(alpha = 0.5f))
-                                .clickable { hidManager.connect(device) }
+                                .border(1.dp, BorderStroke, RoundedCornerShape(12.dp))
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(text = device.name ?: "Unknown TV/Device", color = TextPrimary, fontSize = 14.sp)
                                 Text(text = device.address, color = TextMuted, fontSize = 11.sp)
                             }
-                            Text(text = "Connect", color = AccentCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    text = "Forget",
+                                    color = AccentRed,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable {
+                                        hidManager.clearLastTarget()
+                                        onSettingsChanged(
+                                            settings.copy(
+                                                lastConnectedDeviceAddress = null,
+                                                lastConnectedDeviceName = null
+                                            )
+                                        )
+                                        Toast.makeText(context, "Removed saved target for ${device.name ?: device.address}", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                                Text(
+                                    text = "Connect",
+                                    color = AccentCyan,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable { hidManager.connect(device) }
+                                )
+                            }
                         }
                     }
                 }

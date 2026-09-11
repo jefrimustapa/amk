@@ -24,7 +24,7 @@ class HidService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        hidManager = HidDeviceManager(applicationContext)
+        hidManager = HidDeviceManager.getInstance(applicationContext)
         startForegroundNotification()
         hidManager.start()
     }

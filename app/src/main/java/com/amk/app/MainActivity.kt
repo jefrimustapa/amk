@@ -80,11 +80,24 @@ class MainActivity : ComponentActivity() {
         // Load settings with auto-recovery from external persistent storage
         appSettings = AppSettings.load(this)
 
-        hidManager = HidDeviceManager(this)
+        hidManager = HidDeviceManager.getInstance(this)
 
-        // Restore last connected target address if available
+        // Restore last connected target — but only if the device is still bonded.
+        // If the user unpaired/blocked it from Android BT Settings, clear our saved target
+        // so we don't auto-reconnect to a stale (or unwanted) device.
         appSettings.lastConnectedDeviceAddress?.let { addr ->
-            hidManager.setLastTarget(addr)
+            val isBonded = hidManager.getPairedDevices().any { it.address == addr }
+            if (isBonded) {
+                hidManager.setLastTarget(addr)
+            } else {
+                // Stale address — device was removed from BT; clear it from settings
+                val cleared = appSettings.copy(
+                    lastConnectedDeviceAddress = null,
+                    lastConnectedDeviceName = null
+                )
+                appSettings = cleared
+                AppSettings.save(this, cleared)
+            }
         }
 
         // Keep last connected device updated in persistent settings
