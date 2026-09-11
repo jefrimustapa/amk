@@ -133,6 +133,19 @@ fun SettingsScreen(
         }
     }
 
+    var isDiscoverable by remember { mutableStateOf(false) }
+
+    val discoverableLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != android.app.Activity.RESULT_CANCELED) {
+            isDiscoverable = true
+            Toast.makeText(context, "Phone is discoverable as \"Jefri's S25\"! Look for it on your TV.", Toast.LENGTH_LONG).show()
+        } else {
+            Toast.makeText(context, "Discoverability declined or cancelled.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -239,7 +252,7 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     ActionBtn(
-                        label = "Pair New TV",
+                        label = if (isDiscoverable) "Pairing Active (2 min)" else "Pair New TV",
                         icon = Icons.Rounded.BluetoothSearching,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -255,7 +268,7 @@ fun SettingsScreen(
                             val discoverIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
                                 putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)
                             }
-                            context.startActivity(discoverIntent)
+                            discoverableLauncher.launch(discoverIntent)
                         } catch (e: Exception) {
                             Toast.makeText(context, "Cannot launch discoverability: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
@@ -268,6 +281,34 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             hidManager.disconnect()
+                        }
+                    }
+                }
+
+                if (isDiscoverable) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(AccentCyan.copy(alpha = 0.12f))
+                            .border(1.dp, AccentCyan.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = "📡 Phone is Discoverable as \"Jefri's S25\"",
+                                color = AccentCyan,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Now on your TV: Go to Settings -> Remotes & Accessories -> Add Accessory / Pair Bluetooth, and select \"Jefri's S25\".",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
                         }
                     }
                 }
