@@ -274,6 +274,21 @@ fun SettingsScreen(
                         }
                     }
 
+                    ActionBtn(
+                        label = "BT Settings",
+                        icon = Icons.Rounded.Bluetooth,
+                        modifier = Modifier.weight(0.8f)
+                    ) {
+                        try {
+                            val btSettingsIntent = Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(btSettingsIntent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Cannot open Bluetooth settings: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+
                     if (connectionState == ConnectionState.CONNECTED) {
                         ActionBtn(
                             label = "Disconnect",
