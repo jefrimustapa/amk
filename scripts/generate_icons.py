@@ -1,54 +1,138 @@
 import os
-import shutil
-from PIL import Image, ImageDraw
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-def generate_icons(base_image_path, project_root):
+def generate_neon_amk_icons(base_image_path, project_root):
     img = Image.open(base_image_path).convert('RGBA')
-    
-    # 1. Artwork bounding box in base image: [47, 37, 279, 253]
-    art = img.crop((47, 37, 279, 253))
-    aw, ah = art.size
 
-    # 2. Master circular icon (512x512)
-    master_sz = 512
-    # Balanced scaling (340px width fits proportionally inside the circle badge)
-    target_w = 340
-    target_h = int(target_w * (ah / aw))
-    scaled_art = art.resize((target_w, target_h), Image.Resampling.LANCZOS)
+    # 1. Bounding box of content: [29, 41, 281, 293] (252x252)
+    art = img.crop((29, 41, 281, 293))
+    arr = np.array(art, dtype=float)
+    brightness = np.mean(arr[:, :, :3], axis=2)
+    # Sharp clean threshold for strokes
+    stroke_mask = np.clip((210 - brightness) / 70.0 * 255.0, 0, 255).astype(np.uint8)
 
-    canvas = Image.new('RGBA', (master_sz, master_sz), (247, 247, 247, 255))
-    ox = (master_sz - target_w) // 2
-    oy = (master_sz - target_h) // 2
-    canvas.paste(scaled_art, (ox, oy), mask=scaled_art)
+    size = 512
+    font_path = r'C:\Windows\Fonts\segoeuib.ttf'
 
-    # Circular mask
-    mask = Image.new('L', (master_sz, master_sz), 0)
-    d_mask = ImageDraw.Draw(mask)
-    d_mask.ellipse((4, 4, master_sz - 5, master_sz - 5), fill=255)
+    # 2. Master dark disc background
+    bg = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    bg_draw = ImageDraw.Draw(bg)
+    for r in range(size // 2 - 4, 0, -1):
+        ratio = r / (size // 2)
+        cr = int(24 * ratio + 10 * (1 - ratio))
+        cg = int(20 * ratio + 9 * (1 - ratio))
+        cb = int(42 * ratio + 18 * (1 - ratio))
+        bg_draw.ellipse((size//2 - r, size//2 - r, size//2 + r, size//2 + r), fill=(cr, cg, cb, 255))
 
-    master_circular = Image.new('RGBA', (master_sz, master_sz), (0, 0, 0, 0))
-    master_circular.paste(canvas, (0, 0), mask=mask)
+    # Outer neon ring (Cyan top #00F2FE, Purple bottom #E040FB)
+    ring = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    ring_draw = ImageDraw.Draw(ring)
+    for y in range(size):
+        ratio = y / size
+        r = int(0 * (1 - ratio) + 224 * ratio)
+        g = int(242 * (1 - ratio) + 64 * ratio)
+        b = int(254 * (1 - ratio) + 251 * ratio)
+        ring_draw.line([(0, y), (size, y)], fill=(r, g, b, 255))
 
-    # Outer border ring matching theme line color (#2D3C69)
-    d_res = ImageDraw.Draw(master_circular)
-    d_res.ellipse((4, 4, master_sz - 5, master_sz - 5), outline=(45, 60, 105, 255), width=10)
+    ring_mask = Image.new('L', (size, size), 0)
+    rm_draw = ImageDraw.Draw(ring_mask)
+    rm_draw.ellipse((8, 8, size - 9, size - 9), outline=255, width=9)
+    bg.paste(ring, (0, 0), mask=ring_mask)
 
-    # 3. Master adaptive foreground (108dp viewport, safe area is inner 66-72dp)
+    # Ambient ring glow
+    glow = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    g_draw = ImageDraw.Draw(glow)
+    g_draw.ellipse((8, 8, size - 9, size - 9), outline=(0, 242, 254, 100), width=14)
+    glow = glow.filter(ImageFilter.GaussianBlur(5))
+    bg.paste(glow, (0, 0), mask=glow)
+
+    # 3. Artwork colored with smooth neon gradient (Cyan -> Violet -> Purple)
+    h, w = stroke_mask.shape
+    grad = np.zeros((h, w, 4), dtype=np.uint8)
+    for y in range(h):
+        ratio = y / h
+        r = int(0 * (1 - ratio) + 217 * ratio)
+        g = int(242 * (1 - ratio) + 70 * ratio)
+        b = int(254 * (1 - ratio) + 239 * ratio)
+        grad[y, :, 0] = r
+        grad[y, :, 1] = g
+        grad[y, :, 2] = b
+        grad[y, :, 3] = stroke_mask[y, :]
+
+    colored_art = Image.fromarray(grad)
+    art_size = 290
+    scaled_art = colored_art.resize((art_size, art_size), Image.Resampling.LANCZOS)
+    ox = (size - art_size) // 2
+    oy = 55
+
+    # Subtle neon bloom behind artwork
+    art_glow = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    art_glow.paste(scaled_art, (ox, oy), mask=scaled_art)
+    art_glow = art_glow.filter(ImageFilter.GaussianBlur(5))
+    bg.paste(art_glow, (0, 0), mask=art_glow)
+    bg.paste(scaled_art, (ox, oy), mask=scaled_art)
+
+    # 4. Render 'A M K' text with neon glow
+    font = ImageFont.truetype(font_path, 50)
+    text_layer = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    t_draw = ImageDraw.Draw(text_layer)
+    letters = ['A', 'M', 'K']
+    widths = [t_draw.textbbox((0, 0), l, font=font)[2] - t_draw.textbbox((0, 0), l, font=font)[0] for l in letters]
+    gap = 14
+    total_w = sum(widths) + gap * (len(letters) - 1)
+    cur_x = (size - total_w) // 2
+    ty = 375
+    for l, lw in zip(letters, widths):
+        t_draw.text((cur_x, ty), l, font=font, fill=(230, 80, 255, 255))
+        cur_x += lw + gap
+
+    # Text glow
+    tglow = text_layer.filter(ImageFilter.GaussianBlur(6))
+    bg.paste(tglow, (0, 0), mask=tglow)
+    bg.paste(text_layer, (0, 0), mask=text_layer)
+
+    # Cut circular master icon
+    final_mask = Image.new('L', (size, size), 0)
+    f_draw = ImageDraw.Draw(final_mask)
+    f_draw.ellipse((2, 2, size - 3, size - 3), fill=255)
+    master_circular = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    master_circular.paste(bg, (0, 0), mask=final_mask)
+
+    # 5. Master Adaptive Foreground (108dp viewport, safe area inner 66-72dp)
+    # Master size: 432x432
     fg_master_sz = 432
-    fg_art_w = 260
-    fg_art_h = int(fg_art_w * (ah / aw))
-    scaled_fg_art = art.resize((fg_art_w, fg_art_h), Image.Resampling.LANCZOS)
-    
-    master_fg = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
+    fg_art_w = 230
+    scaled_fg_art = colored_art.resize((fg_art_w, fg_art_w), Image.Resampling.LANCZOS)
     fg_ox = (fg_master_sz - fg_art_w) // 2
-    fg_oy = (fg_master_sz - fg_art_h) // 2
+    fg_oy = 40
+
+    master_fg = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
+    fg_glow = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
+    fg_glow.paste(scaled_fg_art, (fg_ox, fg_oy), mask=scaled_fg_art)
+    fg_glow = fg_glow.filter(ImageFilter.GaussianBlur(4))
+    master_fg.paste(fg_glow, (0, 0), mask=fg_glow)
     master_fg.paste(scaled_fg_art, (fg_ox, fg_oy), mask=scaled_fg_art)
 
-    # Target res directory
-    res_dir = os.path.join(project_root, 'app', 'src', 'main', 'res')
+    # AMK text on foreground
+    fg_font = ImageFont.truetype(font_path, 40)
+    fg_text_layer = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
+    fg_t_draw = ImageDraw.Draw(fg_text_layer)
+    fg_widths = [fg_t_draw.textbbox((0, 0), l, font=fg_font)[2] - fg_t_draw.textbbox((0, 0), l, font=fg_font)[0] for l in letters]
+    fg_gap = 10
+    fg_total_w = sum(fg_widths) + fg_gap * (len(letters) - 1)
+    fg_cur_x = (fg_master_sz - fg_total_w) // 2
+    fg_ty = 295
+    for l, lw in zip(letters, fg_widths):
+        fg_t_draw.text((fg_cur_x, fg_ty), l, font=fg_font, fill=(230, 80, 255, 255))
+        fg_cur_x += lw + fg_gap
 
-    # Android density standard sizes
-    # (density, legacy/round icon size, adaptive fg size)
+    fg_tglow = fg_text_layer.filter(ImageFilter.GaussianBlur(5))
+    master_fg.paste(fg_tglow, (0, 0), mask=fg_tglow)
+    master_fg.paste(fg_text_layer, (0, 0), mask=fg_text_layer)
+
+    # Save to res/mipmap folders
+    res_dir = os.path.join(project_root, 'app', 'src', 'main', 'res')
     densities = {
         'mdpi': (48, 108),
         'hdpi': (72, 162),
@@ -61,24 +145,19 @@ def generate_icons(base_image_path, project_root):
         mipmap_dir = os.path.join(res_dir, f'mipmap-{density}')
         os.makedirs(mipmap_dir, exist_ok=True)
 
-        # A. ic_launcher.png (Circular badge)
         resized_icon = master_circular.resize((icon_sz, icon_sz), Image.Resampling.LANCZOS)
         resized_icon.save(os.path.join(mipmap_dir, 'ic_launcher.png'))
-
-        # B. ic_launcher_round.png (Circular badge)
         resized_icon.save(os.path.join(mipmap_dir, 'ic_launcher_round.png'))
 
-        # C. ic_launcher_foreground.png (Adaptive icon foreground)
         resized_fg = master_fg.resize((fg_sz, fg_sz), Image.Resampling.LANCZOS)
         resized_fg.save(os.path.join(mipmap_dir, 'ic_launcher_foreground.png'))
+        print(f"Saved mipmap-{density} (icon: {icon_sz}x{icon_sz}, fg: {fg_sz}x{fg_sz})")
 
-        print(f"Generated icons for mipmap-{density} (icon: {icon_sz}x{icon_sz}, fg: {fg_sz}x{fg_sz})")
-
-    # Save a master 512x512 copy in root
+    # Save master 512x512
     master_circular.save(os.path.join(project_root, 'app_icon_512.png'))
-    print("All icons successfully generated!")
+    print("Master icon and all mipmap icons successfully updated!")
 
 if __name__ == '__main__':
-    base_img = r'C:\Users\jmustapa\.gemini\antigravity-cli\brain\6b74d58d-c55f-46ba-9155-8da587264e82\.user_uploaded\uploaded_media_1789088923726.png'
+    base_img = r'C:\Users\jmustapa\.gemini\antigravity-cli\brain\6b74d58d-c55f-46ba-9155-8da587264e82\.user_uploaded\uploaded_media_1789089184484.png'
     proj_root = r'D:\ai_project\air_mousekey'
-    generate_icons(base_img, proj_root)
+    generate_neon_amk_icons(base_img, proj_root)
