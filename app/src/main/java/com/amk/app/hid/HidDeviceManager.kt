@@ -144,7 +144,7 @@ class HidDeviceManager private constructor(private val context: Context) {
                     val duration = if (connectionStartTime > 0) System.currentTimeMillis() - connectionStartTime else 0L
                     connectionStartTime = 0L
 
-                    if (device == connectedDevice || connectedDevice == null) {
+                    if (device == connectedDevice || connectedDevice == null || device?.address == connectedDevice?.address) {
                         connectedDevice = null
                         _connectionState.value = ConnectionState.DISCONNECTED
                         _connectedDeviceName.value = null
@@ -469,7 +469,7 @@ class HidDeviceManager private constructor(private val context: Context) {
         }
     }
 
-    fun stopDiscovery() {
+    fun stopDiscovery(clearDiscovered: Boolean = true) {
         try {
             if (bluetoothAdapter?.isDiscovering == true) {
                 bluetoothAdapter.cancelDiscovery()
@@ -483,9 +483,16 @@ class HidDeviceManager private constructor(private val context: Context) {
                 isReceiverRegistered = false
             }
             _isScanning.value = false
+            if (clearDiscovered) {
+                _discoveredDevices.value = emptyList()
+            }
         } catch (e: Exception) {
             Log.e(tag, "Error stopping discovery: ${e.message}", e)
         }
+    }
+
+    fun clearDiscoveredDevices() {
+        _discoveredDevices.value = emptyList()
     }
 
     fun pairAndConnect(device: BluetoothDevice) {

@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material.icons.rounded.BluetoothSearching
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
@@ -140,6 +141,17 @@ fun SettingsScreen(
 
     var isDiscoverable by remember { mutableStateOf(false) }
     var discoverableSecondsRemaining by remember { mutableIntStateOf(0) }
+    var countdownJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    val stopPairing: () -> Unit = {
+        countdownJob?.cancel()
+        countdownJob = null
+        isDiscoverable = false
+        discoverableSecondsRemaining = 0
+        hidManager.stopBleAdvertising()
+        hidManager.stopDiscovery(clearDiscovered = true)
+        Toast.makeText(context, "Pairing stopped", Toast.LENGTH_SHORT).show()
+    }
 
     val discoverableLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -147,22 +159,19 @@ fun SettingsScreen(
         if (result.resultCode != android.app.Activity.RESULT_CANCELED) {
             isDiscoverable = true
             discoverableSecondsRemaining = 120
-            coroutineScope.launch {
+            countdownJob?.cancel()
+            countdownJob = coroutineScope.launch {
                 while (discoverableSecondsRemaining > 0) {
                     kotlinx.coroutines.delay(1000L)
                     discoverableSecondsRemaining--
                 }
                 isDiscoverable = false
                 hidManager.stopBleAdvertising()
-                hidManager.stopDiscovery()
+                hidManager.stopDiscovery(clearDiscovered = true)
             }
             Toast.makeText(context, "Phone is discoverable as \"Jefri's S25\"! Look for it on your TV.", Toast.LENGTH_LONG).show()
         } else {
-            isDiscoverable = false
-            discoverableSecondsRemaining = 0
-            hidManager.stopBleAdvertising()
-            hidManager.stopDiscovery()
-            Toast.makeText(context, "Discoverability declined or cancelled.", Toast.LENGTH_SHORT).show()
+            stopPairing()
         }
     }
 
@@ -259,8 +268,8 @@ fun SettingsScreen(
                 ) {
                     Column {
                         Text(text = "Status: ${connectionState.name}", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                        connectedDeviceName?.let {
-                            Text(text = "Connected to $it", color = AccentGreen, fontSize = 12.sp)
+                        if (connectionState == ConnectionState.CONNECTED && connectedDeviceName != null) {
+                            Text(text = "Connected to $connectedDeviceName", color = AccentGreen, fontSize = 12.sp)
                         }
                     }
                 }
@@ -277,31 +286,44 @@ fun SettingsScreen(
                         if (mins > 0) "${mins}m ${secs}s" else "${secs}s"
                     } else null
 
-                    ActionBtn(
-                        label = if (isDiscoverable && countdownStr != null) "Pairing ($countdownStr)" else "Pair New TV",
-                        icon = Icons.Rounded.BluetoothSearching,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        try {
-                            // Clear last remembered target so phone remains purely in listening mode without reconnect races
-                            hidManager.clearLastTarget()
-                            onSettingsChanged(
-                                settings.copy(
-                                    lastConnectedDeviceAddress = null,
-                                    lastConnectedDeviceName = null
+                    if (isDiscoverable) {
+                        ActionBtn(
+                            label = if (countdownStr != null) "Stop ($countdownStr)" else "Stop Pairing",
+                            icon = Icons.Rounded.Close,
+                            tint = AccentRed,
+                            textColor = AccentRed,
+                            borderColor = AccentRed.copy(alpha = 0.5f),
+                            modifier = Modifier.weight(1.1f)
+                        ) {
+                            stopPairing()
+                        }
+                    } else {
+                        ActionBtn(
+                            label = "Pair New TV",
+                            icon = Icons.Rounded.BluetoothSearching,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            try {
+                                // Clear last remembered target so phone remains purely in listening mode without reconnect races
+                                hidManager.clearLastTarget()
+                                onSettingsChanged(
+                                    settings.copy(
+                                        lastConnectedDeviceAddress = null,
+                                        lastConnectedDeviceName = null
+                                    )
                                 )
-                            )
-                            // Start BLE advertising (0x1812 HID) so Android TV Add Accessory recognizes the phone
-                            hidManager.startBleAdvertising()
-                            // Also scan for nearby TVs in the background
-                            hidManager.startDiscovery()
+                                // Start BLE advertising (0x1812 HID) so Android TV Add Accessory recognizes the phone
+                                hidManager.startBleAdvertising()
+                                // Also scan for nearby TVs in the background
+                                hidManager.startDiscovery()
 
-                            val discoverIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
-                                putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)
+                                val discoverIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
+                                    putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)
+                                }
+                                discoverableLauncher.launch(discoverIntent)
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Cannot launch discoverability: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
-                            discoverableLauncher.launch(discoverIntent)
-                        } catch (e: Exception) {
-                            Toast.makeText(context, "Cannot launch discoverability: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                     }
 
@@ -324,6 +346,9 @@ fun SettingsScreen(
                         ActionBtn(
                             label = "Disconnect",
                             icon = Icons.Rounded.Bluetooth,
+                            tint = AccentRed,
+                            textColor = AccentRed,
+                            borderColor = AccentRed.copy(alpha = 0.5f),
                             modifier = Modifier.weight(1f)
                         ) {
                             hidManager.disconnect()
@@ -351,17 +376,33 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "📡 Phone is Discoverable as \"Jefri's S25\"",
+                                    text = "📡 Discoverable as \"Jefri's S25\"",
                                     color = AccentCyan,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Text(
-                                    text = timeText,
-                                    color = AccentCyan,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = timeText,
+                                        color = AccentCyan,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Stop",
+                                        color = AccentRed,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(AccentRed.copy(alpha = 0.15f))
+                                            .clickable { stopPairing() }
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -441,7 +482,7 @@ fun SettingsScreen(
                 val discovered by hidManager.discoveredDevices.collectAsState()
                 val isScanning by hidManager.isScanning.collectAsState()
 
-                if (isScanning || discovered.isNotEmpty()) {
+                if (isDiscoverable && (isScanning || discovered.isNotEmpty())) {
                     Spacer(modifier = Modifier.height(14.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -456,10 +497,10 @@ fun SettingsScreen(
                         )
                         if (isScanning) {
                             Text(
-                                text = "Stop",
+                                text = "Stop Scan",
                                 color = TextMuted,
                                 fontSize = 11.sp,
-                                modifier = Modifier.clickable { hidManager.stopDiscovery() }
+                                modifier = Modifier.clickable { hidManager.stopDiscovery(clearDiscovered = true) }
                             )
                         }
                     }
@@ -744,6 +785,9 @@ fun ActionBtn(
     label: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     modifier: Modifier = Modifier,
+    tint: androidx.compose.ui.graphics.Color = AccentCyan,
+    textColor: androidx.compose.ui.graphics.Color = TextPrimary,
+    borderColor: androidx.compose.ui.graphics.Color = BorderStroke,
     onClick: () -> Unit
 ) {
     Box(
@@ -751,7 +795,7 @@ fun ActionBtn(
             .height(50.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(DarkSurfaceVariant)
-            .border(1.dp, BorderStroke, RoundedCornerShape(14.dp))
+            .border(1.dp, borderColor, RoundedCornerShape(14.dp))
             .clickable { onClick() },
         contentAlignment = Alignment.Center
     ) {
@@ -759,9 +803,9 @@ fun ActionBtn(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Icon(icon, contentDescription = label, tint = AccentCyan, modifier = Modifier.size(18.dp))
+            Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text(text = label, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(text = label, color = textColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
         }
     }
 }
