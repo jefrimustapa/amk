@@ -9,11 +9,10 @@ def generate_neon_amk_icons(base_image_path, project_root):
     art = img.crop((29, 41, 281, 293))
     arr = np.array(art, dtype=float)
     brightness = np.mean(arr[:, :, :3], axis=2)
-    # Sharp clean threshold for strokes
     stroke_mask = np.clip((210 - brightness) / 70.0 * 255.0, 0, 255).astype(np.uint8)
 
     size = 512
-    font_path = r'C:\Windows\Fonts\segoeuib.ttf'
+    font_path = os.path.join(project_root, 'scripts', 'Orbitron.ttf')
 
     # 2. Master dark disc background
     bg = Image.new('RGBA', (size, size), (0, 0, 0, 0))
@@ -73,8 +72,8 @@ def generate_neon_amk_icons(base_image_path, project_root):
     bg.paste(art_glow, (0, 0), mask=art_glow)
     bg.paste(scaled_art, (ox, oy), mask=scaled_art)
 
-    # 4. Render 'A M K' text with neon glow
-    font = ImageFont.truetype(font_path, 50)
+    # 4. Render 'AMK' with futuristic Orbitron font
+    font = ImageFont.truetype(font_path, 56)
     text_layer = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     t_draw = ImageDraw.Draw(text_layer)
     letters = ['A', 'M', 'K']
@@ -82,9 +81,10 @@ def generate_neon_amk_icons(base_image_path, project_root):
     gap = 14
     total_w = sum(widths) + gap * (len(letters) - 1)
     cur_x = (size - total_w) // 2
-    ty = 375
+    ty = 370
     for l, lw in zip(letters, widths):
-        t_draw.text((cur_x, ty), l, font=font, fill=(230, 80, 255, 255))
+        for dx, dy in [(0,0), (1,0), (0,1), (1,1)]:
+            t_draw.text((cur_x + dx, ty + dy), l, font=font, fill=(240, 90, 255, 255))
         cur_x += lw + gap
 
     # Text glow
@@ -114,17 +114,18 @@ def generate_neon_amk_icons(base_image_path, project_root):
     master_fg.paste(fg_glow, (0, 0), mask=fg_glow)
     master_fg.paste(scaled_fg_art, (fg_ox, fg_oy), mask=scaled_fg_art)
 
-    # AMK text on foreground
-    fg_font = ImageFont.truetype(font_path, 40)
+    # AMK text on foreground with Orbitron
+    fg_font = ImageFont.truetype(font_path, 44)
     fg_text_layer = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
     fg_t_draw = ImageDraw.Draw(fg_text_layer)
     fg_widths = [fg_t_draw.textbbox((0, 0), l, font=fg_font)[2] - fg_t_draw.textbbox((0, 0), l, font=fg_font)[0] for l in letters]
-    fg_gap = 10
+    fg_gap = 11
     fg_total_w = sum(fg_widths) + fg_gap * (len(letters) - 1)
     fg_cur_x = (fg_master_sz - fg_total_w) // 2
     fg_ty = 295
     for l, lw in zip(letters, fg_widths):
-        fg_t_draw.text((fg_cur_x, fg_ty), l, font=fg_font, fill=(230, 80, 255, 255))
+        for dx, dy in [(0,0), (1,0), (0,1), (1,1)]:
+            fg_t_draw.text((fg_cur_x + dx, fg_ty + dy), l, font=fg_font, fill=(240, 90, 255, 255))
         fg_cur_x += lw + fg_gap
 
     fg_tglow = fg_text_layer.filter(ImageFilter.GaussianBlur(5))
@@ -155,7 +156,7 @@ def generate_neon_amk_icons(base_image_path, project_root):
 
     # Save master 512x512
     master_circular.save(os.path.join(project_root, 'app_icon_512.png'))
-    print("Master icon and all mipmap icons successfully updated!")
+    print("Master icon and all mipmap icons successfully updated with Orbitron typography!")
 
 if __name__ == '__main__':
     base_img = r'C:\Users\jmustapa\.gemini\antigravity-cli\brain\6b74d58d-c55f-46ba-9155-8da587264e82\.user_uploaded\uploaded_media_1789089184484.png'
