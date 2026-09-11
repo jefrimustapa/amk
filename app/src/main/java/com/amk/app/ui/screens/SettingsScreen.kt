@@ -134,14 +134,25 @@ fun SettingsScreen(
     }
 
     var isDiscoverable by remember { mutableStateOf(false) }
+    var discoverableSecondsRemaining by remember { mutableIntStateOf(0) }
 
     val discoverableLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode != android.app.Activity.RESULT_CANCELED) {
             isDiscoverable = true
+            discoverableSecondsRemaining = 120
+            coroutineScope.launch {
+                while (discoverableSecondsRemaining > 0) {
+                    kotlinx.coroutines.delay(1000L)
+                    discoverableSecondsRemaining--
+                }
+                isDiscoverable = false
+            }
             Toast.makeText(context, "Phone is discoverable as \"Jefri's S25\"! Look for it on your TV.", Toast.LENGTH_LONG).show()
         } else {
+            isDiscoverable = false
+            discoverableSecondsRemaining = 0
             Toast.makeText(context, "Discoverability declined or cancelled.", Toast.LENGTH_SHORT).show()
         }
     }
@@ -251,8 +262,14 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    val countdownStr = if (discoverableSecondsRemaining > 0) {
+                        val mins = discoverableSecondsRemaining / 60
+                        val secs = discoverableSecondsRemaining % 60
+                        if (mins > 0) "${mins}m ${secs}s" else "${secs}s"
+                    } else null
+
                     ActionBtn(
-                        label = if (isDiscoverable) "Pairing Active (2 min)" else "Pair New TV",
+                        label = if (isDiscoverable && countdownStr != null) "Pairing ($countdownStr)" else "Pair New TV",
                         icon = Icons.Rounded.BluetoothSearching,
                         modifier = Modifier.weight(1f)
                     ) {
@@ -300,7 +317,7 @@ fun SettingsScreen(
                     }
                 }
 
-                if (isDiscoverable) {
+                if (isDiscoverable && discoverableSecondsRemaining > 0) {
                     Spacer(modifier = Modifier.height(10.dp))
                     Box(
                         modifier = Modifier
@@ -311,12 +328,27 @@ fun SettingsScreen(
                             .padding(12.dp)
                     ) {
                         Column {
-                            Text(
-                                text = "📡 Phone is Discoverable as \"Jefri's S25\"",
-                                color = AccentCyan,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            val mins = discoverableSecondsRemaining / 60
+                            val secs = discoverableSecondsRemaining % 60
+                            val timeText = if (mins > 0) "${mins}m ${secs}s" else "${secs}s"
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "📡 Phone is Discoverable as \"Jefri's S25\"",
+                                    color = AccentCyan,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = timeText,
+                                    color = AccentCyan,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Now on your TV: Go to Settings -> Remotes & Accessories -> Add Accessory / Pair Bluetooth, and select \"Jefri's S25\".",
