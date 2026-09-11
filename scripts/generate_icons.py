@@ -1,146 +1,146 @@
 import os
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
-def generate_neon_amk_icons(base_image_path, project_root):
-    img = Image.open(base_image_path).convert('RGBA')
-
-    # 1. Bounding box of content: [29, 41, 281, 293] (252x252)
-    art = img.crop((29, 41, 281, 293))
-    arr = np.array(art, dtype=float)
-    brightness = np.mean(arr[:, :, :3], axis=2)
-    stroke_mask = np.clip((210 - brightness) / 70.0 * 255.0, 0, 255).astype(np.uint8)
-
-    size = 512
+def generate_icons(project_root, down_px=22):
+    WIDTH, HEIGHT = 512, 512
+    CENTER = (256, 256)
     font_path = os.path.join(project_root, 'scripts', 'Orbitron.ttf')
 
-    # 2. Master dark disc background
-    bg = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    bg_draw = ImageDraw.Draw(bg)
-    for r in range(size // 2 - 4, 0, -1):
-        ratio = r / (size // 2)
-        cr = int(24 * ratio + 10 * (1 - ratio))
-        cg = int(20 * ratio + 9 * (1 - ratio))
-        cb = int(42 * ratio + 18 * (1 - ratio))
-        bg_draw.ellipse((size//2 - r, size//2 - r, size//2 + r, size//2 + r), fill=(cr, cg, cb, 255))
+    CYAN = np.array([0, 240, 255], dtype=float)
+    PURPLE = np.array([210, 50, 255], dtype=float)
 
-    # Outer neon ring (Cyan top #00F2FE, Purple bottom #E040FB)
-    ring = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    ring_draw = ImageDraw.Draw(ring)
-    for y in range(size):
-        ratio = y / size
-        r = int(0 * (1 - ratio) + 224 * ratio)
-        g = int(242 * (1 - ratio) + 64 * ratio)
-        b = int(254 * (1 - ratio) + 251 * ratio)
-        ring_draw.line([(0, y), (size, y)], fill=(r, g, b, 255))
+    def get_gradient_color(t):
+        t = np.clip(t, 0.0, 1.0)
+        col = (1.0 - t) * CYAN + t * PURPLE
+        return (int(col[0]), int(col[1]), int(col[2]))
 
-    ring_mask = Image.new('L', (size, size), 0)
-    rm_draw = ImageDraw.Draw(ring_mask)
-    rm_draw.ellipse((8, 8, size - 9, size - 9), outline=255, width=9)
-    bg.paste(ring, (0, 0), mask=ring_mask)
-
-    # Ambient ring glow
-    glow = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    g_draw = ImageDraw.Draw(glow)
-    g_draw.ellipse((8, 8, size - 9, size - 9), outline=(0, 242, 254, 100), width=14)
-    glow = glow.filter(ImageFilter.GaussianBlur(5))
-    bg.paste(glow, (0, 0), mask=glow)
-
-    # 3. Artwork colored with smooth neon gradient (Cyan -> Violet -> Purple)
-    h, w = stroke_mask.shape
-    grad = np.zeros((h, w, 4), dtype=np.uint8)
-    for y in range(h):
-        ratio = y / h
-        r = int(0 * (1 - ratio) + 217 * ratio)
-        g = int(242 * (1 - ratio) + 70 * ratio)
-        b = int(254 * (1 - ratio) + 239 * ratio)
-        grad[y, :, 0] = r
-        grad[y, :, 1] = g
-        grad[y, :, 2] = b
-        grad[y, :, 3] = stroke_mask[y, :]
-
-    colored_art = Image.fromarray(grad)
-    art_size = 290
-    scaled_art = colored_art.resize((art_size, art_size), Image.Resampling.LANCZOS)
-    ox = (size - art_size) // 2
-
-    # 10px clearance between mouse bottom and text top
-    # Mouse bottom is at index 289 in scaled art (290px)
-    # Glyph height = 41px, offset = 16px
-    mouse_gap_px = 10
-    total_group_h = 290 + mouse_gap_px + 41
-    oy = (size - total_group_h) // 2
-    text_y = oy + 274 + mouse_gap_px
-
-    # Subtle neon bloom behind artwork
-    art_glow = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    art_glow.paste(scaled_art, (ox, oy), mask=scaled_art)
-    art_glow = art_glow.filter(ImageFilter.GaussianBlur(5))
-    bg.paste(art_glow, (0, 0), mask=art_glow)
-    bg.paste(scaled_art, (ox, oy), mask=scaled_art)
-
-    # 4. Render 'AMK' with Orbitron font (10px below mouse)
-    font = ImageFont.truetype(font_path, 56)
-    text_layer = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    t_draw = ImageDraw.Draw(text_layer)
-    letters = ['A', 'M', 'K']
-    widths = [t_draw.textbbox((0, 0), l, font=font)[2] - t_draw.textbbox((0, 0), l, font=font)[0] for l in letters]
-    gap = 14
-    total_w = sum(widths) + gap * (len(letters) - 1)
-    cur_x = (size - total_w) // 2
-    for l, lw in zip(letters, widths):
-        for dx, dy in [(0,0), (1,0), (0,1), (1,1)]:
-            t_draw.text((cur_x + dx, text_y + dy), l, font=font, fill=(240, 90, 255, 255))
-        cur_x += lw + gap
-
-    # Text glow
-    tglow = text_layer.filter(ImageFilter.GaussianBlur(6))
-    bg.paste(tglow, (0, 0), mask=tglow)
-    bg.paste(text_layer, (0, 0), mask=text_layer)
-
-    # Cut circular master icon
-    final_mask = Image.new('L', (size, size), 0)
-    f_draw = ImageDraw.Draw(final_mask)
-    f_draw.ellipse((2, 2, size - 3, size - 3), fill=255)
-    master_circular = Image.new('RGBA', (size, size), (0, 0, 0, 0))
-    master_circular.paste(bg, (0, 0), mask=final_mask)
-
-    # 5. Master Adaptive Foreground (108dp viewport, safe area inner 66-72dp)
-    fg_master_sz = 432
-    fg_art_w = 230
-    scaled_fg_art = colored_art.resize((fg_art_w, fg_art_w), Image.Resampling.LANCZOS)
-    fg_ox = (fg_master_sz - fg_art_w) // 2
+    kw, kh = 140, 168
+    m_scale = 1.45
+    mw = int(kw * m_scale)
+    mh = int(kh * m_scale)
     
-    fg_font = ImageFont.truetype(font_path, 44)
-    fg_mouse_gap = 8
-    fg_total_group_h = fg_art_w + fg_mouse_gap + 32
-    fg_oy = (fg_master_sz - fg_total_group_h) // 2
-    fg_text_y = fg_oy + fg_art_w + fg_mouse_gap - 12
+    a_k_gap = 36
+    total_caps_span = kw * 2 + a_k_gap
+    kx_a = CENTER[0] - total_caps_span // 2
+    kx_k = kx_a + kw + a_k_gap
+    
+    my = CENTER[1] - mh // 2 - 8
+    mx = CENTER[0] - mw // 2
+    ky_caps = (CENTER[1] - kh // 2) + down_px
 
-    master_fg = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
-    fg_glow = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
-    fg_glow.paste(scaled_fg_art, (fg_ox, fg_oy), mask=scaled_fg_art)
-    fg_glow = fg_glow.filter(ImageFilter.GaussianBlur(4))
-    master_fg.paste(fg_glow, (0, 0), mask=fg_glow)
-    master_fg.paste(scaled_fg_art, (fg_ox, fg_oy), mask=scaled_fg_art)
+    master = Image.new('RGBA', (WIDTH, HEIGHT), (10, 12, 22, 255))
+    draw = ImageDraw.Draw(master)
 
-    # AMK text on foreground with calibrated gap
-    fg_text_layer = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
-    fg_t_draw = ImageDraw.Draw(fg_text_layer)
-    fg_widths = [fg_t_draw.textbbox((0, 0), l, font=fg_font)[2] - fg_t_draw.textbbox((0, 0), l, font=fg_font)[0] for l in letters]
-    fg_gap = 11
-    fg_total_w = sum(fg_widths) + fg_gap * (len(letters) - 1)
-    fg_cur_x = (fg_master_sz - fg_total_w) // 2
-    for l, lw in zip(letters, fg_widths):
-        for dx, dy in [(0,0), (1,0), (0,1), (1,1)]:
-            fg_t_draw.text((fg_cur_x + dx, fg_text_y + dy), l, font=fg_font, fill=(240, 90, 255, 255))
-        fg_cur_x += lw + fg_gap
+    def draw_bold(d, pos, text, font, fill_col, rad=1):
+        x, y = pos
+        for dx in range(-rad, rad + 1):
+            for dy in range(-rad, rad + 1):
+                d.text((x + dx, y + dy), text, fill=fill_col, font=font, anchor='mm')
 
-    fg_tglow = fg_text_layer.filter(ImageFilter.GaussianBlur(5))
-    master_fg.paste(fg_tglow, (0, 0), mask=fg_tglow)
-    master_fg.paste(fg_text_layer, (0, 0), mask=fg_text_layer)
+    font_letter = ImageFont.truetype(font_path, int(kh * 0.52))
 
-    # Save to res/mipmap folders
+    total_w = (kx_k + kw) - kx_a
+    gx0 = kx_a
+    gx1 = kx_a + total_w
+    def t_from_x(x):
+        return np.clip((x - gx0) / float(gx1 - gx0), 0.0, 1.0)
+
+    # 1. M in background
+    col_m = get_gradient_color(t_from_x(mx + mw // 2))
+    v_notch_h = int(mh * 0.26)
+    pts_m = [
+        (mx + 12, my + 50),
+        (mx + 34, my + 6),
+        (mx + mw//2 - 16, my),
+        (mx + mw//2, my + v_notch_h),
+        (mx + mw//2 + 16, my),
+        (mx + mw - 34, my + 6),
+        (mx + mw - 12, my + 50),
+        (mx + mw - 6, my + 105),
+        (mx + mw - 10, my + mh - 22),
+        (mx + mw - 28, my + mh),
+        (mx + 28, my + mh),
+        (mx + 10, my + mh - 22),
+        (mx + 6, my + 105)
+    ]
+    draw.polygon(pts_m, fill=(16, 20, 36, 245), outline=col_m, width=6)
+    draw.line([(mx + mw//2, my + v_notch_h), (mx + mw//2, my + int(mh * 0.54))], fill=col_m, width=4)
+    draw.arc([mx + 18, my + int(mh * 0.36), mx + mw - 18, my + int(mh * 0.64)],
+             start=200, end=340, fill=col_m, width=3)
+             
+    wh_w = 18
+    wh_h = 36
+    wh_x = mx + mw//2 - wh_w//2
+    wh_y = my + int(mh * 0.16)
+    draw.rounded_rectangle([wh_x, wh_y, wh_x + wh_w, wh_y + wh_h], radius=7, fill=(35, 45, 80, 255), outline=col_m, width=3)
+    for y_off in [9, 18, 27]:
+        draw.line([(wh_x + 3, wh_y + y_off), (wh_x + wh_w - 2, wh_y + y_off)], fill=(220, 235, 255), width=2)
+        
+    draw.arc([mx + 38, my + mh - 40, mx + mw - 38, my + mh - 20],
+             start=20, end=160, fill=col_m, width=3)
+
+    # 2. Shadow for A & K
+    shadow = Image.new('RGBA', (WIDTH, HEIGHT), (0, 0, 0, 0))
+    s_draw = ImageDraw.Draw(shadow)
+    rad = 22
+    s_draw.rounded_rectangle([kx_a - 2, ky_caps - 2, kx_a + kw + 2, ky_caps + kh + 2], radius=rad, fill=(0, 0, 0, 220))
+    s_draw.rounded_rectangle([kx_k - 2, ky_caps - 2, kx_k + kw + 2, ky_caps + kh + 2], radius=rad, fill=(0, 0, 0, 220))
+    s_blur = shadow.filter(ImageFilter.GaussianBlur(8))
+    master.alpha_composite(s_blur)
+    draw = ImageDraw.Draw(master)
+
+    # 3. Keycap A
+    col_a = get_gradient_color(t_from_x(kx_a + kw // 2))
+    draw.rounded_rectangle([kx_a, ky_caps, kx_a + kw, ky_caps + kh], radius=rad, fill=(14, 18, 32, 255), outline=col_a, width=6)
+    tx0_a = kx_a + 17
+    tx1_a = kx_a + kw - 17
+    ty0 = ky_caps + 14
+    ty1 = ky_caps + kh - 26
+    draw.rounded_rectangle([tx0_a, ty0, tx1_a, ty1], radius=18, fill=(20, 26, 46, 220), outline=(col_a[0], col_a[1], col_a[2], 180), width=3)
+    draw.arc([tx0_a - 8, ty0 + 4, tx0_a + 20, ty1 - 4], start=270, end=90, fill=col_a, width=3)
+    draw.arc([tx1_a - 20, ty0 + 4, tx1_a + 8, ty1 - 4], start=90, end=270, fill=col_a, width=3)
+    c_off = 9
+    t_off = 4
+    draw.line([(kx_a + c_off, ky_caps + c_off), (tx0_a + t_off, ty0 + t_off)], fill=col_a, width=3)
+    draw.line([(kx_a + kw - c_off, ky_caps + c_off), (tx1_a - t_off, ty0 + t_off)], fill=col_a, width=3)
+    draw.line([(kx_a + c_off, ky_caps + kh - c_off), (tx0_a + t_off, ty1 - t_off)], fill=col_a, width=3)
+    draw.line([(kx_a + kw - c_off, ky_caps + kh - c_off), (tx1_a - t_off, ty1 - t_off)], fill=col_a, width=3)
+    draw_bold(draw, ((tx0_a + tx1_a) // 2, (ty0 + ty1) // 2), 'A', font_letter, col_a, rad=1)
+
+    # 4. Keycap K
+    col_k = get_gradient_color(t_from_x(kx_k + kw // 2))
+    draw.rounded_rectangle([kx_k, ky_caps, kx_k + kw, ky_caps + kh], radius=rad, fill=(16, 16, 32, 255), outline=col_k, width=6)
+    tx0_k = kx_k + 17
+    tx1_k = kx_k + kw - 17
+    draw.rounded_rectangle([tx0_k, ty0, tx1_k, ty1], radius=18, fill=(24, 20, 46, 220), outline=(col_k[0], col_k[1], col_k[2], 180), width=3)
+    draw.arc([tx0_k - 8, ty0 + 4, tx0_k + 20, ty1 - 4], start=270, end=90, fill=col_k, width=3)
+    draw.arc([tx1_k - 20, ty0 + 4, tx1_k + 8, ty1 - 4], start=90, end=270, fill=col_k, width=3)
+    draw.line([(kx_k + c_off, ky_caps + c_off), (tx0_k + t_off, ty0 + t_off)], fill=col_k, width=3)
+    draw.line([(kx_k + kw - c_off, ky_caps + c_off), (tx1_k - t_off, ty0 + t_off)], fill=col_k, width=3)
+    draw.line([(kx_k + c_off, ky_caps + kh - c_off), (tx0_k + t_off, ty1 - t_off)], fill=col_k, width=3)
+    draw.line([(kx_k + kw - c_off, ky_caps + kh - c_off), (tx1_k - t_off, ty1 - t_off)], fill=col_k, width=3)
+    draw_bold(draw, ((tx0_k + tx1_k) // 2, (ty0 + ty1) // 2), 'K', font_letter, col_k, rad=1)
+
+    master.save(os.path.join(project_root, 'app_icon_512.png'))
+
+    art_crop = master.crop((kx_a - 4, my - 4, kx_k + kw + 4, ky_caps + kh + 4))
+    fg_master = Image.new('RGBA', (432, 432), (0, 0, 0, 0))
+    scale_fg = 260.0 / art_crop.width
+    fg_w = int(art_crop.width * scale_fg)
+    fg_h = int(art_crop.height * scale_fg)
+    art_scaled = art_crop.resize((fg_w, fg_h), Image.Resampling.LANCZOS)
+    fg_ox = (432 - fg_w) // 2
+    fg_oy = (432 - fg_h) // 2
+    fg_master.paste(art_scaled, (fg_ox, fg_oy), mask=art_scaled)
+
+    legacy_padded = Image.new('RGBA', (512, 512), (10, 12, 22, 255))
+    leg_scale = 0.82
+    scaled_w = int(512 * leg_scale)
+    scaled_h = int(512 * leg_scale)
+    scaled_art = master.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS)
+    legacy_padded.paste(scaled_art, ((512 - scaled_w)//2, (512 - scaled_h)//2), mask=scaled_art)
+
     res_dir = os.path.join(project_root, 'app', 'src', 'main', 'res')
     densities = {
         'mdpi': (48, 108),
@@ -154,19 +154,14 @@ def generate_neon_amk_icons(base_image_path, project_root):
         mipmap_dir = os.path.join(res_dir, f'mipmap-{density}')
         os.makedirs(mipmap_dir, exist_ok=True)
 
-        resized_icon = master_circular.resize((icon_sz, icon_sz), Image.Resampling.LANCZOS)
+        resized_icon = legacy_padded.resize((icon_sz, icon_sz), Image.Resampling.LANCZOS)
         resized_icon.save(os.path.join(mipmap_dir, 'ic_launcher.png'))
         resized_icon.save(os.path.join(mipmap_dir, 'ic_launcher_round.png'))
 
-        resized_fg = master_fg.resize((fg_sz, fg_sz), Image.Resampling.LANCZOS)
+        resized_fg = fg_master.resize((fg_sz, fg_sz), Image.Resampling.LANCZOS)
         resized_fg.save(os.path.join(mipmap_dir, 'ic_launcher_foreground.png'))
-        print(f"Saved mipmap-{density} (icon: {icon_sz}x{icon_sz}, fg: {fg_sz}x{fg_sz})")
 
-    # Save master 512x512
-    master_circular.save(os.path.join(project_root, 'app_icon_512.png'))
-    print("Master icon and all mipmap icons successfully updated with 10px mouse gap!")
+    print('Persisted generate_icons.py with G2 down_px=22')
 
 if __name__ == '__main__':
-    base_img = r'C:\Users\jmustapa\.gemini\antigravity-cli\brain\6b74d58d-c55f-46ba-9155-8da587264e82\.user_uploaded\uploaded_media_1789089184484.png'
-    proj_root = r'D:\ai_project\air_mousekey'
-    generate_neon_amk_icons(base_img, proj_root)
+    generate_icons(r'D:i_projectir_mousekey', down_px=22)
