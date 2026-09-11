@@ -41,6 +41,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -86,6 +87,10 @@ fun SettingsScreen(
 
     val connectionState by hidManager.connectionState.collectAsState()
     val connectedDeviceName by hidManager.connectedDeviceName.collectAsState()
+
+    LaunchedEffect(Unit) {
+        hidManager.refreshPairedDevices()
+    }
 
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var updateResult by remember { mutableStateOf<UpdateInfo?>(null) }
@@ -148,11 +153,15 @@ fun SettingsScreen(
                     discoverableSecondsRemaining--
                 }
                 isDiscoverable = false
+                hidManager.stopBleAdvertising()
+                hidManager.stopDiscovery()
             }
             Toast.makeText(context, "Phone is discoverable as \"Jefri's S25\"! Look for it on your TV.", Toast.LENGTH_LONG).show()
         } else {
             isDiscoverable = false
             discoverableSecondsRemaining = 0
+            hidManager.stopBleAdvertising()
+            hidManager.stopDiscovery()
             Toast.makeText(context, "Discoverability declined or cancelled.", Toast.LENGTH_SHORT).show()
         }
     }
@@ -282,6 +291,11 @@ fun SettingsScreen(
                                     lastConnectedDeviceName = null
                                 )
                             )
+                            // Start BLE advertising (0x1812 HID) so Android TV Add Accessory recognizes the phone
+                            hidManager.startBleAdvertising()
+                            // Also scan for nearby TVs in the background
+                            hidManager.startDiscovery()
+
                             val discoverIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE).apply {
                                 putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 120)
                             }
@@ -368,7 +382,7 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                val paired = hidManager.getPairedDevices()
+                val paired by hidManager.pairedDevices.collectAsState()
                 if (paired.isEmpty()) {
                     Text(
                         text = "No paired devices found. Put TV in 'Add Accessory' mode.",
@@ -399,14 +413,17 @@ fun SettingsScreen(
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.clickable {
-                                        hidManager.clearLastTarget()
-                                        onSettingsChanged(
-                                            settings.copy(
-                                                lastConnectedDeviceAddress = null,
-                                                lastConnectedDeviceName = null
+                                        val devName = device.name ?: device.address
+                                        hidManager.unpairDevice(device)
+                                        if (settings.lastConnectedDeviceAddress == device.address) {
+                                            onSettingsChanged(
+                                                settings.copy(
+                                                    lastConnectedDeviceAddress = null,
+                                                    lastConnectedDeviceName = null
+                                                )
                                             )
-                                        )
-                                        Toast.makeText(context, "Removed saved target for ${device.name ?: device.address}", Toast.LENGTH_SHORT).show()
+                                        }
+                                        Toast.makeText(context, "Unpaired $devName", Toast.LENGTH_SHORT).show()
                                     }
                                 )
                                 Text(
@@ -415,6 +432,70 @@ fun SettingsScreen(
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.clickable { hidManager.connect(device) }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                val discovered by hidManager.discoveredDevices.collectAsState()
+                val isScanning by hidManager.isScanning.collectAsState()
+
+                if (isScanning || discovered.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = if (isScanning) "Nearby Devices (Scanning...):" else "Discovered Nearby Devices:",
+                            color = AccentCyan,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (isScanning) {
+                            Text(
+                                text = "Stop",
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.clickable { hidManager.stopDiscovery() }
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    if (discovered.isEmpty() && isScanning) {
+                        Text(
+                            text = "Searching for nearby TVs...",
+                            color = TextMuted,
+                            fontSize = 12.sp
+                        )
+                    } else {
+                        discovered.forEach { device ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(DarkSurfaceVariant.copy(alpha = 0.5f))
+                                    .border(1.dp, BorderStroke.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(text = device.name ?: "Unknown Device", color = TextPrimary, fontSize = 13.sp)
+                                    Text(text = device.address, color = TextMuted, fontSize = 11.sp)
+                                }
+                                Text(
+                                    text = "Pair & Connect",
+                                    color = AccentGreen,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.clickable {
+                                        hidManager.pairAndConnect(device)
+                                    }
                                 )
                             }
                         }

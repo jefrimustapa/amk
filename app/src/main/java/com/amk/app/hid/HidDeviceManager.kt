@@ -6,10 +6,19 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothHidDevice
 import android.bluetooth.BluetoothHidDeviceAppSdpSettings
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.le.AdvertiseCallback
+import android.bluetooth.le.AdvertiseData
+import android.bluetooth.le.AdvertiseSettings
+import android.bluetooth.le.BluetoothLeAdvertiser
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Handler
 import android.os.Looper
+import android.os.ParcelUuid
 import android.util.Log
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.concurrent.Executors
@@ -34,6 +43,26 @@ class HidDeviceManager private constructor(private val context: Context) {
 
     private val _connectedDeviceName = MutableStateFlow<String?>(null)
     val connectedDeviceName: StateFlow<String?> = _connectedDeviceName
+
+    private val _pairedDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
+    val pairedDevices: StateFlow<List<BluetoothDevice>> = _pairedDevices
+
+    private var isBondReceiverRegistered = false
+    private val bondReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == BluetoothDevice.ACTION_BOND_STATE_CHANGED) {
+                val device = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                }
+                val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE)
+                Log.i(tag, "Bond state changed for ${device?.name ?: device?.address}: $bondState")
+                refreshPairedDevices()
+            }
+        }
+    }
 
     private var isAppRegistered = false
     private var connectionStartTime = 0L
@@ -96,6 +125,8 @@ class HidDeviceManager private constructor(private val context: Context) {
             Log.i(tag, "HID Connection State changed: $deviceName -> state $state")
             when (state) {
                 BluetoothProfile.STATE_CONNECTED -> {
+                    stopBleAdvertising()
+                    stopDiscovery()
                     connectedDevice = device
                     lastTargetDevice = device
                     connectionStartTime = System.currentTimeMillis()
@@ -160,10 +191,26 @@ class HidDeviceManager private constructor(private val context: Context) {
             Log.w(tag, "Bluetooth is disabled or not supported")
             return
         }
+        if (!isBondReceiverRegistered) {
+            val filter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+            ContextCompat.registerReceiver(context, bondReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+            isBondReceiverRegistered = true
+        }
+        refreshPairedDevices()
         bluetoothAdapter.getProfileProxy(context, serviceListener, BluetoothProfile.HID_DEVICE)
     }
 
     fun stop() {
+        stopBleAdvertising()
+        stopDiscovery()
+        if (isBondReceiverRegistered) {
+            try {
+                context.unregisterReceiver(bondReceiver)
+            } catch (e: Exception) {
+                Log.w(tag, "Error unregistering bond receiver: ${e.message}")
+            }
+            isBondReceiverRegistered = false
+        }
         try {
             if (isAppRegistered && hidDevice != null) {
                 hidDevice?.unregisterApp()
@@ -250,6 +297,210 @@ class HidDeviceManager private constructor(private val context: Context) {
             bluetoothAdapter?.bondedDevices?.toList() ?: emptyList()
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    fun refreshPairedDevices() {
+        _pairedDevices.value = getPairedDevices()
+    }
+
+    fun unpairDevice(device: BluetoothDevice): Boolean {
+        return try {
+            if (connectedDevice?.address == device.address) {
+                disconnect()
+            }
+            if (lastTargetDevice?.address == device.address) {
+                clearLastTarget()
+            }
+            val removeBondMethod = device.javaClass.getMethod("removeBond")
+            val success = removeBondMethod.invoke(device) as? Boolean ?: false
+            Log.i(tag, "unpairDevice ${device.name ?: device.address}: $success")
+            mainHandler.postDelayed({ refreshPairedDevices() }, 300)
+            success
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to unpair device ${device.address}: ${e.message}", e)
+            false
+        }
+    }
+
+    // -------------------------------------------------------------
+    // BLE Advertising (0x1812 HID) & Discovery for Android TV Pairing
+    // -------------------------------------------------------------
+    private var bleAdvertiser: BluetoothLeAdvertiser? = null
+    private var isBleAdvertising = false
+
+    private val _discoveredDevices = MutableStateFlow<List<BluetoothDevice>>(emptyList())
+    val discoveredDevices: StateFlow<List<BluetoothDevice>> = _discoveredDevices
+
+    private val _isScanning = MutableStateFlow(false)
+    val isScanning: StateFlow<Boolean> = _isScanning
+
+    private var isReceiverRegistered = false
+
+    private val advertiseCallback = object : AdvertiseCallback() {
+        override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
+            Log.i(tag, "BLE HID Advertising (0x1812) started successfully")
+            isBleAdvertising = true
+        }
+
+        override fun onStartFailure(errorCode: Int) {
+            Log.e(tag, "BLE HID Advertising failed: error code $errorCode")
+            isBleAdvertising = false
+        }
+    }
+
+    private val discoveryReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                BluetoothDevice.ACTION_FOUND -> {
+                    val device = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    }
+                    val name = device?.name
+                    if (device != null && !name.isNullOrBlank()) {
+                        val current = _discoveredDevices.value
+                        if (current.none { it.address == device.address }) {
+                            _discoveredDevices.value = current + device
+                            Log.i(tag, "Discovered device: $name (${device.address})")
+                        }
+                    }
+                }
+                BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
+                    _isScanning.value = false
+                    Log.i(tag, "Bluetooth discovery finished")
+                }
+                BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                    val device = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    }
+                    val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.BOND_NONE)
+                    Log.i(tag, "Bond state changed for ${device?.name ?: device?.address}: $bondState")
+                    if (device != null && bondState == BluetoothDevice.BOND_BONDED) {
+                        if (device.address == lastTargetDevice?.address) {
+                            Log.i(tag, "Bond complete for target ${device.name}, initiating HID connect...")
+                            mainHandler.postDelayed({ connect(device) }, 1000)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fun startBleAdvertising() {
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) return
+        if (isBleAdvertising) return
+
+        try {
+            bleAdvertiser = bluetoothAdapter.bluetoothLeAdvertiser
+            if (bleAdvertiser == null) {
+                Log.w(tag, "BLE Advertiser not supported on this device")
+                return
+            }
+
+            val settings = AdvertiseSettings.Builder()
+                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+                .setConnectable(true)
+                .setTimeout(0)
+                .build()
+
+            val pUuid = ParcelUuid.fromString("00001812-0000-1000-8000-00805f9b34fb")
+            val advertiseData = AdvertiseData.Builder()
+                .addServiceUuid(pUuid)
+                .build()
+
+            val scanResponseData = AdvertiseData.Builder()
+                .setIncludeDeviceName(true)
+                .build()
+
+            bleAdvertiser?.startAdvertising(settings, advertiseData, scanResponseData, advertiseCallback)
+            Log.i(tag, "Started BLE Advertising for HID 0x1812")
+        } catch (e: Exception) {
+            Log.e(tag, "Error starting BLE advertising: ${e.message}", e)
+        }
+    }
+
+    fun stopBleAdvertising() {
+        if (isBleAdvertising && bleAdvertiser != null) {
+            try {
+                bleAdvertiser?.stopAdvertising(advertiseCallback)
+                Log.i(tag, "Stopped BLE Advertising")
+            } catch (e: Exception) {
+                Log.e(tag, "Error stopping BLE advertising: ${e.message}", e)
+            } finally {
+                isBleAdvertising = false
+            }
+        }
+    }
+
+    fun startDiscovery() {
+        if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled) return
+        _discoveredDevices.value = emptyList()
+        try {
+            if (!isReceiverRegistered) {
+                val filter = IntentFilter().apply {
+                    addAction(BluetoothDevice.ACTION_FOUND)
+                    addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+                    addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+                }
+                ContextCompat.registerReceiver(
+                    context,
+                    discoveryReceiver,
+                    filter,
+                    ContextCompat.RECEIVER_EXPORTED
+                )
+                isReceiverRegistered = true
+            }
+            if (bluetoothAdapter.isDiscovering) {
+                bluetoothAdapter.cancelDiscovery()
+            }
+            val started = bluetoothAdapter.startDiscovery()
+            _isScanning.value = started
+            Log.i(tag, "startDiscovery started: $started")
+        } catch (e: Exception) {
+            Log.e(tag, "Error starting discovery: ${e.message}", e)
+            _isScanning.value = false
+        }
+    }
+
+    fun stopDiscovery() {
+        try {
+            if (bluetoothAdapter?.isDiscovering == true) {
+                bluetoothAdapter.cancelDiscovery()
+            }
+            if (isReceiverRegistered) {
+                try {
+                    context.unregisterReceiver(discoveryReceiver)
+                } catch (e: IllegalArgumentException) {
+                    // Ignored
+                }
+                isReceiverRegistered = false
+            }
+            _isScanning.value = false
+        } catch (e: Exception) {
+            Log.e(tag, "Error stopping discovery: ${e.message}", e)
+        }
+    }
+
+    fun pairAndConnect(device: BluetoothDevice) {
+        stopDiscovery()
+        stopBleAdvertising()
+        lastTargetDevice = device
+        _connectionState.value = ConnectionState.CONNECTING
+        _connectedDeviceName.value = device.name ?: device.address
+        Log.i(tag, "pairAndConnect initiated for ${device.name} (${device.address})")
+        val isBonded = bluetoothAdapter?.bondedDevices?.any { it.address == device.address } == true
+        if (!isBonded) {
+            val bondCreated = device.createBond()
+            Log.i(tag, "createBond called: $bondCreated")
+        } else {
+            connect(device)
         }
     }
 
