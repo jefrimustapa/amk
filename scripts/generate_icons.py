@@ -63,7 +63,15 @@ def generate_neon_amk_icons(base_image_path, project_root):
     art_size = 290
     scaled_art = colored_art.resize((art_size, art_size), Image.Resampling.LANCZOS)
     ox = (size - art_size) // 2
-    oy = 55
+
+    # Layout with exact 2px clearance
+    # Art bottom is at oy + 289
+    # Text glyph top is at text_y + 16
+    # 2px clearance: text_y + 16 = oy + 289 + 1 + 2  =>  text_y = oy + 276
+    gap_px = 2
+    total_group_h = 290 + gap_px + 41  # 333
+    oy = (size - total_group_h) // 2   # 89
+    text_y = oy + 274 + gap_px         # 365
 
     # Subtle neon bloom behind artwork
     art_glow = Image.new('RGBA', (size, size), (0, 0, 0, 0))
@@ -72,7 +80,7 @@ def generate_neon_amk_icons(base_image_path, project_root):
     bg.paste(art_glow, (0, 0), mask=art_glow)
     bg.paste(scaled_art, (ox, oy), mask=scaled_art)
 
-    # 4. Render 'AMK' with futuristic Orbitron font
+    # 4. Render 'AMK' with Orbitron font (2px distance below artwork)
     font = ImageFont.truetype(font_path, 56)
     text_layer = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     t_draw = ImageDraw.Draw(text_layer)
@@ -81,10 +89,9 @@ def generate_neon_amk_icons(base_image_path, project_root):
     gap = 14
     total_w = sum(widths) + gap * (len(letters) - 1)
     cur_x = (size - total_w) // 2
-    ty = 370
     for l, lw in zip(letters, widths):
         for dx, dy in [(0,0), (1,0), (0,1), (1,1)]:
-            t_draw.text((cur_x + dx, ty + dy), l, font=font, fill=(240, 90, 255, 255))
+            t_draw.text((cur_x + dx, text_y + dy), l, font=font, fill=(240, 90, 255, 255))
         cur_x += lw + gap
 
     # Text glow
@@ -100,12 +107,15 @@ def generate_neon_amk_icons(base_image_path, project_root):
     master_circular.paste(bg, (0, 0), mask=final_mask)
 
     # 5. Master Adaptive Foreground (108dp viewport, safe area inner 66-72dp)
-    # Master size: 432x432
     fg_master_sz = 432
     fg_art_w = 230
     scaled_fg_art = colored_art.resize((fg_art_w, fg_art_w), Image.Resampling.LANCZOS)
     fg_ox = (fg_master_sz - fg_art_w) // 2
-    fg_oy = 40
+    
+    fg_font = ImageFont.truetype(font_path, 44)
+    fg_total_group_h = fg_art_w + 2 + 32
+    fg_oy = (fg_master_sz - fg_total_group_h) // 2
+    fg_text_y = fg_oy + fg_art_w + 2 - 12
 
     master_fg = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
     fg_glow = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
@@ -114,18 +124,16 @@ def generate_neon_amk_icons(base_image_path, project_root):
     master_fg.paste(fg_glow, (0, 0), mask=fg_glow)
     master_fg.paste(scaled_fg_art, (fg_ox, fg_oy), mask=scaled_fg_art)
 
-    # AMK text on foreground with Orbitron
-    fg_font = ImageFont.truetype(font_path, 44)
+    # AMK text on foreground with 2px gap
     fg_text_layer = Image.new('RGBA', (fg_master_sz, fg_master_sz), (0, 0, 0, 0))
     fg_t_draw = ImageDraw.Draw(fg_text_layer)
     fg_widths = [fg_t_draw.textbbox((0, 0), l, font=fg_font)[2] - fg_t_draw.textbbox((0, 0), l, font=fg_font)[0] for l in letters]
     fg_gap = 11
     fg_total_w = sum(fg_widths) + fg_gap * (len(letters) - 1)
     fg_cur_x = (fg_master_sz - fg_total_w) // 2
-    fg_ty = 295
     for l, lw in zip(letters, fg_widths):
         for dx, dy in [(0,0), (1,0), (0,1), (1,1)]:
-            fg_t_draw.text((fg_cur_x + dx, fg_ty + dy), l, font=fg_font, fill=(240, 90, 255, 255))
+            fg_t_draw.text((fg_cur_x + dx, fg_text_y + dy), l, font=fg_font, fill=(240, 90, 255, 255))
         fg_cur_x += lw + fg_gap
 
     fg_tglow = fg_text_layer.filter(ImageFilter.GaussianBlur(5))
@@ -156,7 +164,7 @@ def generate_neon_amk_icons(base_image_path, project_root):
 
     # Save master 512x512
     master_circular.save(os.path.join(project_root, 'app_icon_512.png'))
-    print("Master icon and all mipmap icons successfully updated with Orbitron typography!")
+    print("Master icon and all mipmap icons successfully updated with 2px gap!")
 
 if __name__ == '__main__':
     base_img = r'C:\Users\jmustapa\.gemini\antigravity-cli\brain\6b74d58d-c55f-46ba-9155-8da587264e82\.user_uploaded\uploaded_media_1789089184484.png'
